@@ -1,9 +1,10 @@
 const UserModel = require('../../models/user');
+const pagination = require('../../../libs/pagination');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const config = require('config');
 const { validationResult } = require('express-validator');
-const logger = require('../../../common/logger'); // Giả định bạn có logger (ví dụ: winston)
+const logger = require('../../../libs/logger'); // Giả định bạn có logger (ví dụ: winston)
 
 // Tạo tài khoản người dùng mới
 exports.createUser = async (req, res) => {
@@ -64,23 +65,23 @@ exports.createUser = async (req, res) => {
 };
 
 // Lấy danh sách tất cả người dùng (có phân trang)
+
 exports.getAllUsers = async (req, res) => {
   try {
     // 1. Kiểm tra quyền truy cập (chỉ admin được xem danh sách)
     if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Access denied. Only admins can view all users.' });
-      // Note: Đảm bảo chỉ admin mới được xem danh sách người dùng.
     }
 
     // 2. Lấy tham số phân trang từ query (nếu có)
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    // Note: Hỗ trợ phân trang để tránh tải toàn bộ dữ liệu (ví dụ: page=1, limit=10).
 
-    // 3. Đếm tổng số người dùng
-    const totalUsers = await UserModel.countDocuments();
-    // Note: Dùng để tính tổng số trang.
+    // 3. Sử dụng hàm pagination để lấy thông tin phân trang
+    
+    const paginationInfo = await pagination(page, limit, UserModel, {});
+    // Note: Truyền tham số page, limit, model (UserModel), và query rỗng (lấy tất cả người dùng)
 
     // 4. Lấy danh sách người dùng với phân trang
     const users = await UserModel.find()
@@ -93,23 +94,15 @@ exports.getAllUsers = async (req, res) => {
     // 5. Trả về kết quả
     res.status(200).json({
       users,
-      pagination: {
-        total: totalUsers,
-        page,
-        limit,
-        totalPages: Math.ceil(totalUsers / limit),
-      },
+      pagination: paginationInfo,
     });
     logger.info(`Fetched all users by admin ${req.user.id}`, { page, limit });
-    // Note: Trả về danh sách người dùng với thông tin phân trang.
 
   } catch (err) {
     logger.error('Error fetching users', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
   }
 };
-
 // Lấy thông tin chi tiết một người dùng theo ID
 exports.getUserById = async (req, res) => {
   try {
