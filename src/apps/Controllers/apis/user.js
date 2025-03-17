@@ -7,7 +7,7 @@ const { validationResult } = require('express-validator');
 const logger = require('../../../libs/logger'); // Giả định bạn có logger (ví dụ: winston)
 
 // Tạo tài khoản người dùng mới
-exports.createUser = async (req, res) => {
+exports.registerUser = async (req, res) => {
   try {
     // 1. Kiểm tra lỗi validation từ middleware
     const errors = validationResult(req);

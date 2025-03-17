@@ -6,10 +6,10 @@ const userController = require('../apps/Controllers/apis/user');
 const authMiddleware = require('../apps/middlewares/auth');
 const  requireRole = require('../apps/middlewares/requireRole');
 // API for Users
-router.post('/users',authMiddleware, requireRole('admin') , userController.createUser);
-router.get('/users',authMiddleware, requireRole('admin'), userController.getAllUsers);
-router.get('/users/:id',authMiddleware, userController.getUserById);
-router.delete('/users/:id',authMiddleware, requireRole('admin'), userController.deleteUser);
+router.post('/register', userController.registerUser);// đăng ký tài khoản
+router.get('/users',authMiddleware, requireRole('admin'), userController.getAllUsers);// Chỉ admin mới có thể xem danh sách user
+router.get('/users/:id',authMiddleware, userController.getUserById);// Chỉ user đó hoặc admin mới có thể xem thông tin user
+router.delete('/users/:id',authMiddleware, requireRole('admin'), userController.deleteUser);// Chỉ admin mới có thể xóa user
 
 router.put('/users/:id',authMiddleware,
     [
@@ -20,12 +20,11 @@ router.put('/users/:id',authMiddleware,
         .isIn(['admin', 'customer', 'technician', 'agent'])
         .withMessage('Invalid role'),
     ],
-    userController.updateUser
-  );
+    userController.updateUser ); // Chỉ user đó hoặc admin mới có thể cập nhật thông tin user
 
 
 // API for login (không cần auth)               
-router.post('/login', userController.loginUser);
+router.post('/login', userController.loginUser); // Không yêu cầu auth để user có thể đăng nhập
 router.post('/reset-password', userController.resetPassword); // Không yêu cầu auth để user có thể reset mật khẩu
 
 module.exports = router;
