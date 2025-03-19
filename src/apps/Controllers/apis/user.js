@@ -135,13 +135,65 @@ exports.getUserById = async (req, res) => {
 };
 
 // Cập nhật thông tin người dùng
+// exports.updateUser = async (req, res) => {
+//   try {
+//     // 1. Kiểm tra lỗi validation từ middleware
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({ errors: errors.array() });
+//       // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ.
+//     }
+
+//     const userId = req.params.id;
+
+//     // 2. Kiểm tra quyền: Chỉ admin hoặc chính người dùng đó được cập nhật
+//     if (req.user.role !== 'admin' && req.user.id !== userId) {
+//       return res.status(403).json({ error: 'Access denied. You can only update your own profile.' });
+//       // Note: Đảm bảo chỉ admin hoặc chính người dùng đó mới cập nhật được thông tin.
+//     }
+
+//     // 3. Kiểm tra người dùng tồn tại
+//     const user = await UserModel.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ error: 'User not found' });
+//       // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
+//     }
+
+//     // 4. Mã hóa mật khẩu nếu có cập nhật password
+//     if (req.body.password) {
+//       const salt = await bcrypt.genSalt(10);
+//       req.body.password = await bcrypt.hash(req.body.password, salt);
+//       // Note: Mã hóa mật khẩu mới trước khi lưu.
+//     }
+
+//     // 5. Cập nhật thông tin người dùng
+//     const updatedUser = await UserModel.findByIdAndUpdate(
+//       userId,
+//       { $set: req.body },
+//       { new: true, runValidators: true }
+//     )
+//       .populate('reference_id', 'name email phone_number')
+//       .populate('referred_by', 'name email phone_number')
+//       .lean();
+
+//     // 6. Trả về kết quả
+//     res.status(200).json(updatedUser);
+//     logger.info(`User ${userId} updated by ${req.user.id}`, { updatedFields: Object.keys(req.body) });
+//     // Note: Trả về thông tin người dùng đã được cập nhật.
+
+//   } catch (err) {
+//     logger.error('Error updating user', { error: err.message, stack: err.stack });
+//     res.status(500).json({ error: 'Internal server error', details: err.message });
+//     // Note: Trả về lỗi 500 nếu có lỗi server.
+//   }
+// };
 exports.updateUser = async (req, res) => {
   try {
     // 1. Kiểm tra lỗi validation từ middleware
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
-      // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ.
+      // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ (email không đúng định dạng, thiếu email, v.v.).
     }
 
     const userId = req.params.id;
@@ -159,14 +211,32 @@ exports.updateUser = async (req, res) => {
       // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
     }
 
-    // 4. Mã hóa mật khẩu nếu có cập nhật password
+    // 4. Kiểm tra email trùng lặp (nếu email thay đổi)
+    if (req.body.email && req.body.email !== user.email) {
+      const existingUserByEmail = await UserModel.findOne({ email: req.body.email }).lean();
+      if (existingUserByEmail) {
+        return res.status(400).json({ error: 'Email already exists.' });
+        // Note: Trả về lỗi 400 nếu email đã tồn tại trong database.
+      }
+    }
+
+    // 5. Kiểm tra phone_number trùng lặp (nếu phone_number thay đổi)
+    if (req.body.phone_number && req.body.phone_number !== user.phone_number) {
+      const existingUserByPhone = await UserModel.findOne({ phone_number: req.body.phone_number }).lean();
+      if (existingUserByPhone) {
+        return res.status(400).json({ error: 'Phone number already exists.' });
+        // Note: Trả về lỗi 400 nếu phone_number đã tồn tại trong database.
+      }
+    }
+
+    // 6. Mã hóa mật khẩu nếu có cập nhật password
     if (req.body.password) {
       const salt = await bcrypt.genSalt(10);
       req.body.password = await bcrypt.hash(req.body.password, salt);
       // Note: Mã hóa mật khẩu mới trước khi lưu.
     }
 
-    // 5. Cập nhật thông tin người dùng
+    // 7. Cập nhật thông tin người dùng
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       { $set: req.body },
@@ -176,11 +246,10 @@ exports.updateUser = async (req, res) => {
       .populate('referred_by', 'name email phone_number')
       .lean();
 
-    // 6. Trả về kết quả
-    res.status(200).json(updatedUser);
+    // 8. Trả về kết quả
+    res.status(200).json({ success: true, user: updatedUser });
     logger.info(`User ${userId} updated by ${req.user.id}`, { updatedFields: Object.keys(req.body) });
-    // Note: Trả về thông tin người dùng đã được cập nhật.
-
+    // Note: Trả về status 200 với success: true và thông tin user đã cập nhật.
   } catch (err) {
     logger.error('Error updating user', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
