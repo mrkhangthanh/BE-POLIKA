@@ -64,6 +64,9 @@ exports.registerUser = async (req, res) => {
   }
 };
 
+const CustomerModel = require('../../models/customer');
+const TechnicianModel = require('../../models/technician');
+
 exports.createUser = async (req, res) => {
   try {
     // 1. Kiểm tra lỗi validation từ middleware
@@ -73,7 +76,7 @@ exports.createUser = async (req, res) => {
     }
 
     // 2. Lấy dữ liệu từ body
-    const { name, email, password, phone_number, role, reference_id, roleReferenceModel, referred_by } = req.body;
+    const { name, email, password, phone_number, role, reference_id, roleReferenceModel, referred_by, address, specialization } = req.body;
 
     // 3. Kiểm tra email và phone_number đã tồn tại chưa
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
@@ -88,7 +91,6 @@ exports.createUser = async (req, res) => {
       password,
       phone_number,
       role: role || 'customer',
-      reference_id: reference_id || null,
       referred_by,
     };
 
@@ -100,16 +102,58 @@ exports.createUser = async (req, res) => {
     }
 
     const user = new UserModel(userData);
-
     const savedUser = await user.save();
 
-    // 5. Populate dữ liệu để trả về thông tin chi tiết
-    const populatedUser = await UserModel.findById(savedUser._id)
-      .populate('reference_id', 'name email phone_number')
-      .populate('referred_by', 'name email phone_number')
-      .lean();
+    // 5. Nếu role là 'customer' hoặc 'technician', tạo document tương ứng trong Customer hoặc Technician
+    let referenceDoc = null;
+    if (role === 'customer') {
+      if (!address || !address.street || !address.city || !address.district || !address.ward) {
+        return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer role.' });
+      }
+      const customerData = {
+        user_id: savedUser._id,
+        address,
+        referred_by: referred_by || null,
+      };
+      referenceDoc = await new CustomerModel(customerData).save();
+      userData.reference_id = referenceDoc._id;
+    } else if (role === 'technician') {
+      if (!address || !address.street || !address.city || !address.district || !address.ward) {
+        return res.status(400).json({ error: 'Address (street, city, district, ward) is required for technician role.' });
+      }
+      if (!specialization || !Array.isArray(specialization) || specialization.length === 0) {
+        return res.status(400).json({ error: 'Specialization is required for technician role.' });
+      }
+      const technicianData = {
+        user_id: savedUser._id,
+        address,
+        specialization,
+      };
+      referenceDoc = await new TechnicianModel(technicianData).save();
+      userData.reference_id = referenceDoc._id;
+    }
 
-    // 6. Trả về kết quả
+    // Cập nhật user với reference_id (nếu có)
+    if (referenceDoc) {
+      await UserModel.updateOne({ _id: savedUser._id }, { reference_id: referenceDoc._id });
+    }
+
+    // 6. Populate dữ liệu để trả về thông tin chi tiết (chỉ khi cần thiết)
+    let populatedUserQuery = UserModel.findById(savedUser._id);
+
+    // Populate reference_id chỉ khi roleReferenceModel tồn tại và model đã được đăng ký
+    if (userData.roleReferenceModel && mongoose.modelNames().includes(userData.roleReferenceModel)) {
+      populatedUserQuery = populatedUserQuery.populate('reference_id', 'address specialization');
+    }
+
+    // Populate referred_by chỉ khi referred_by tồn tại và model Users đã được đăng ký
+    if (userData.referred_by && mongoose.modelNames().includes('Users')) {
+      populatedUserQuery = populatedUserQuery.populate('referred_by', 'name email phone_number');
+    }
+
+    const populatedUser = await populatedUserQuery.lean();
+
+    // 7. Trả về kết quả
     res.status(201).json({ success: true, user: populatedUser });
     logger.info(`User created successfully by admin ${req.user.id}`, { userId: savedUser._id });
   } catch (err) {

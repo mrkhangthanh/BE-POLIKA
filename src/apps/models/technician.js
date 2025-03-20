@@ -1,46 +1,40 @@
 const mongoose = require('../../common/init.myDB')();
 
 const technicianSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  email: {
-    type: String,
+  user_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users',
     required: true,
     unique: true,
-    trim: true,
-    lowercase: true,
-  },
-  phone: {
-    type: String,
-    required: true,
+    // Note: Liên kết với document trong collection 'users' có role là 'technician'. Đảm bảo mỗi Technician chỉ liên kết với một User.
   },
   address: {
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    district: { type: String, required: true },
-    ward: { type: String, required: true },
+    street: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    district: { type: String, required: true, trim: true },
+    ward: { type: String, required: true, trim: true },
   },
   specialization: {
     type: [String],
     required: true,
+    // Note: Danh sách chuyên môn của kỹ thuật viên (ví dụ: ['điện', 'nước']).
   },
   availability: {
     type: String,
     enum: ['available', 'busy'],
     default: 'available',
+    // Note: Trạng thái sẵn sàng của kỹ thuật viên.
   },
-  created_at: {
-    type: Date,
-    default: Date.now,
+}, {
+  timestamps: {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
   },
-  updated_at: {
-    type: Date,
-    default: Date.now,
-  },
-}, { timestamps: true });
+  indexes: [
+    { key: { user_id: 1 }, unique: true }, // Index duy nhất cho user_id
+  ],
+});
 
-const TechnicianModel = mongoose.model('Technicians', technicianSchema, 'technicians');
+// Đăng ký model với tên 'Technician' để khớp với roleReferenceModel
+const TechnicianModel = mongoose.model('Technician', technicianSchema, 'technicians');
 module.exports = TechnicianModel;
