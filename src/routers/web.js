@@ -6,7 +6,25 @@ const userController = require('../apps/Controllers/apis/user');
 const authMiddleware = require('../apps/middlewares/auth');
 const  requireRole = require('../apps/middlewares/requireRole');
 // API for Users
-router.post('/register',authMiddleware, requireRole('admin'), userController.registerUser);// đăng ký tài khoản
+router.post('/register', userController.registerUser);// đăng ký tài khoản
+
+router.post(
+  '/createUser',
+  authMiddleware,
+  requireRole('admin'),
+  [
+    body('email').isEmail().withMessage('Invalid email format'),
+    body('email').notEmpty().withMessage('Email is required'),
+    body('password').notEmpty().withMessage('Password is required'),
+    body('role')
+      .optional()
+      .isIn(['admin', 'customer', 'technician', 'agent'])
+      .withMessage('Invalid role'),
+  ],
+  userController.createUser
+); // Tạo tài khoản trong trang Admin Dashboard
+
+
 router.get('/users',authMiddleware, requireRole('admin'), userController.getAllUsers);// Chỉ admin mới có thể xem danh sách user
 router.get('/users/:id',authMiddleware, userController.getUserById);// Chỉ user đó hoặc admin mới có thể xem thông tin user
 router.delete('/users/:id',authMiddleware, requireRole('admin'), userController.deleteUser);// Chỉ admin mới có thể xóa user

@@ -64,6 +64,55 @@ exports.registerUser = async (req, res) => {
   }
 };
 
+exports.createUser = async (req, res) => {
+  try {
+    // 1. Kiểm tra lỗi validation từ middleware
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+      // Note: Trả về lỗi 400 nếu dữ liệu đầu vào không hợp lệ (email, password, role).
+    }
+
+    // 2. Lấy dữ liệu từ body
+    const { name, email, password, phone_number, role, reference_id, roleReferenceModel, referred_by } = req.body;
+
+    // 3. Kiểm tra email và phone_number đã tồn tại chưa
+    const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email or phone number already exists.' });
+      // Note: Tránh trùng lặp email hoặc số điện thoại.
+    }
+
+    // 4. Tạo tài khoản mới
+    const user = new UserModel({
+      name,
+      email,
+      password, // Mật khẩu sẽ được mã hóa tự động bởi hook pre-save trong model
+      phone_number,
+      role: role || 'customer', // Gán mặc định role là 'customer' nếu không có
+      reference_id: reference_id || null, // Gán mặc định là null nếu không có
+      roleReferenceModel: roleReferenceModel || (role === 'customer' ? 'Customer' : role === 'technician' ? 'Technician' : 'Agent'), // Gán mặc định dựa trên role
+      referred_by,
+    });
+
+    const savedUser = await user.save();
+
+    // 5. Populate dữ liệu để trả về thông tin chi tiết
+    const populatedUser = await UserModel.findById(savedUser._id)
+      .populate('reference_id', 'name email phone_number')
+      .populate('referred_by', 'name email phone_number')
+      .lean();
+
+    // 6. Trả về kết quả
+    res.status(201).json({ success: true, user: populatedUser });
+    logger.info(`User created successfully by admin ${req.user.id}`, { userId: savedUser._id });
+    // Note: Trả về status 201 (Created) với success: true và thông tin tài khoản đầy đủ.
+  } catch (err) {
+    logger.error('Error creating user', { error: err.message, stack: err.stack });
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+    // Note: Trả về lỗi 500 nếu có lỗi server.
+  }
+};
 // Lấy danh sách tất cả người dùng (có phân trang)
 
 exports.getAllUsers = async (req, res) => {
@@ -325,7 +374,7 @@ exports.loginUser = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, role: user.role }, // Payload: thông tin user
       config.get('app.jwtSecret'), // Secret key từ config
-      { expiresIn: '1h' } // Token hết hạn sau 1 giờ
+      { expiresIn: '1m' } // Token hết hạn sau 1 giờ
     );
 
     // 7. Trả về kết quả
