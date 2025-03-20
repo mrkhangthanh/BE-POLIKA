@@ -374,7 +374,7 @@ exports.loginUser = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, role: user.role }, // Payload: thông tin user
       config.get('app.jwtSecret'), // Secret key từ config
-      { expiresIn: '1m' } // Token hết hạn sau 1 giờ
+      { expiresIn: '1d' } // Token hết hạn sau 1 giờ
     );
 
     // 7. Trả về kết quả
