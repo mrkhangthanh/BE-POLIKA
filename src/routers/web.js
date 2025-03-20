@@ -16,14 +16,18 @@ router.post(
     body('email').isEmail().withMessage('Invalid email format'),
     body('email').notEmpty().withMessage('Email is required'),
     body('password').notEmpty().withMessage('Password is required'),
+    body('phone_number')
+      .notEmpty()
+      .withMessage('Phone number is required')
+      .matches(/^[0-9]{10,11}$/)
+      .withMessage('Phone number must be 10-11 digits'),
     body('role')
       .optional()
       .isIn(['admin', 'customer', 'technician', 'agent'])
       .withMessage('Invalid role'),
   ],
   userController.createUser
-); // Tạo tài khoản trong trang Admin Dashboard
-
+);
 
 router.get('/users',authMiddleware, requireRole('admin'), userController.getAllUsers);// Chỉ admin mới có thể xem danh sách user
 router.get('/users/:id',authMiddleware, userController.getUserById);// Chỉ user đó hoặc admin mới có thể xem thông tin user
