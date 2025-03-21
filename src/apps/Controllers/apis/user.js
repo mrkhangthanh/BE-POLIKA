@@ -1,492 +1,455 @@
 const UserModel = require('../../models/user');
-const pagination = require('../../../libs/pagination');
+const OrderModel = require('../../models/order');
+const MessageModel = require('../../models/message');
+const PostModel = require('../../models/post');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const config = require('config');
-const { validationResult } = require('express-validator');
-const logger = require('../../../libs/logger'); // Giả định bạn có logger (ví dụ: winston)
+const logger = require('../../../libs/logger');
+const { body, validationResult } = require('express-validator');
 
-// Tạo tài khoản người dùng mới
-exports.registerUser = async (req, res) => {
+// Đăng nhập
+exports.login = async (req, res) => {
   try {
-    // 1. Kiểm tra lỗi validation từ middleware
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-      // Note: Trả về lỗi 400 nếu dữ liệu đầu vào không hợp lệ (được kiểm tra bởi express-validator trong route).
+    const { email, password } = req.body;
+
+    const user = await UserModel.findOne({ email }).lean();
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    // 2. Kiểm tra quyền truy cập (chỉ admin được tạo tài khoản)
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Only admins can create users.' });
-      // Note: Đảm bảo chỉ admin mới được tạo tài khoản mới (req.user từ authMiddleware).
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    // 3. Lấy dữ liệu từ body
-    const { name, email, password, phone_number, role, reference_id, roleReferenceModel, referred_by } = req.body;
-
-    // 4. Kiểm tra email và phone_number đã tồn tại chưa
-    const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email or phone number already exists.' });
-      // Note: Tránh trùng lặp email hoặc số điện thoại (đã có index unique trong model, nhưng thêm kiểm tra để trả về thông báo thân thiện).
+    if (user.status !== 'active') {
+      return res.status(403).json({ error: 'Your account is inactive.' });
     }
 
-    // 5. Tạo tài khoản mới
-    const user = new UserModel({
-      name,
-      email,
-      password, // Mật khẩu sẽ được mã hóa tự động bởi hook pre-save trong model
-      phone_number,
-      role,
-      reference_id,
-      roleReferenceModel,
-      referred_by,
-    });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    await UserModel.updateOne({ _id: user._id }, { last_login: new Date() });
 
-    const savedUser = await user.save();
-
-    // 6. Populate dữ liệu để trả về thông tin chi tiết
-    const populatedUser = await UserModel.findById(savedUser._id)
-      .populate('reference_id', 'name email phone_number') // Lấy thông tin tham chiếu (Customer/Technician)
-      .populate('referred_by', 'name email phone_number') // Lấy thông tin người giới thiệu (nếu có)
-      .lean(); // Tăng hiệu suất bằng cách trả về plain object
-
-    // 7. Trả về kết quả
-    res.status(201).json(populatedUser);
-    logger.info(`User created successfully by admin ${req.user.id}`, { userId: savedUser._id });
-    // Note: Trả về status 201 (Created) với thông tin tài khoản đầy đủ. Ghi log để theo dõi.
-
+    res.status(200).json({ success: true, token, user });
   } catch (err) {
-    logger.error('Error creating user', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 với thông tin chi tiết, tránh lộ stack trace nhạy cảm.
   }
 };
 
-const CustomerModel = require('../../models/customer');
-const TechnicianModel = require('../../models/technician');
-
-exports.createUser = async (req, res) => {
+// Đăng ký (cho khách hàng)
+exports.register = async (req, res) => {
   try {
-    // 1. Kiểm tra lỗi validation từ middleware
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    // 2. Lấy dữ liệu từ body
-    const { name, email, password, phone_number, role, reference_id, roleReferenceModel, referred_by, address, specialization } = req.body;
+    const { name, email, password, phone_number, address } = req.body;
 
-    // 3. Kiểm tra email và phone_number đã tồn tại chưa
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
     if (existingUser) {
       return res.status(400).json({ error: 'Email or phone number already exists.' });
     }
 
-    // 4. Tạo tài khoản mới
     const userData = {
       name,
       email,
       password,
       phone_number,
-      role: role || 'customer',
-      referred_by,
+      role: 'customer',
+      address,
     };
-
-    // Gán roleReferenceModel chỉ khi role là 'customer' hoặc 'technician'
-    if (role === 'customer' || role === 'technician') {
-      userData.roleReferenceModel = roleReferenceModel || (role === 'customer' ? 'Customer' : 'Technician');
-    } else {
-      userData.roleReferenceModel = null;
-    }
 
     const user = new UserModel(userData);
     const savedUser = await user.save();
 
-    // 5. Nếu role là 'customer' hoặc 'technician', tạo document tương ứng trong Customer hoặc Technician
-    let referenceDoc = null;
-    if (role === 'customer') {
-      if (!address || !address.street || !address.city || !address.district || !address.ward) {
-        return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer role.' });
-      }
-      const customerData = {
-        user_id: savedUser._id,
-        address,
-        referred_by: referred_by || null,
-      };
-      referenceDoc = await new CustomerModel(customerData).save();
-      userData.reference_id = referenceDoc._id;
-    } else if (role === 'technician') {
-      if (!address || !address.street || !address.city || !address.district || !address.ward) {
-        return res.status(400).json({ error: 'Address (street, city, district, ward) is required for technician role.' });
-      }
-      if (!specialization || !Array.isArray(specialization) || specialization.length === 0) {
-        return res.status(400).json({ error: 'Specialization is required for technician role.' });
-      }
-      const technicianData = {
-        user_id: savedUser._id,
-        address,
-        specialization,
-      };
-      referenceDoc = await new TechnicianModel(technicianData).save();
-      userData.reference_id = referenceDoc._id;
-    }
-
-    // Cập nhật user với reference_id (nếu có)
-    if (referenceDoc) {
-      await UserModel.updateOne({ _id: savedUser._id }, { reference_id: referenceDoc._id });
-    }
-
-    // 6. Populate dữ liệu để trả về thông tin chi tiết (chỉ khi cần thiết)
-    let populatedUserQuery = UserModel.findById(savedUser._id);
-
-    // Populate reference_id chỉ khi roleReferenceModel tồn tại và model đã được đăng ký
-    if (userData.roleReferenceModel && mongoose.modelNames().includes(userData.roleReferenceModel)) {
-      populatedUserQuery = populatedUserQuery.populate('reference_id', 'address specialization');
-    }
-
-    // Populate referred_by chỉ khi referred_by tồn tại và model Users đã được đăng ký
-    if (userData.referred_by && mongoose.modelNames().includes('Users')) {
-      populatedUserQuery = populatedUserQuery.populate('referred_by', 'name email phone_number');
-    }
-
-    const populatedUser = await populatedUserQuery.lean();
-
-    // 7. Trả về kết quả
-    res.status(201).json({ success: true, user: populatedUser });
-    logger.info(`User created successfully by admin ${req.user.id}`, { userId: savedUser._id });
+    const token = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.status(201).json({ success: true, token, user: savedUser });
   } catch (err) {
-    logger.error('Error creating user', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
-// Lấy danh sách tất cả người dùng (có phân trang)
 
+// Tạo user (cho admin)
+exports.createUser = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, email, password, phone_number, role, address, specialization, referred_by } = req.body;
+
+    const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email or phone number already exists.' });
+    }
+
+    if ((role === 'customer' || role === 'technician') && (!address || !address.street || !address.city || !address.district || !address.ward)) {
+      return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer and technician roles.' });
+    }
+
+    if (role === 'technician' && (!specialization || !Array.isArray(specialization) || specialization.length === 0)) {
+      return res.status(400).json({ error: 'Specialization is required for technician role.' });
+    }
+
+    const userData = {
+      name,
+      email,
+      password,
+      phone_number,
+      role,
+      address: role === 'customer' || role === 'technician' ? address : undefined,
+      specialization: role === 'technician' ? specialization : undefined,
+      referred_by,
+    };
+
+    const user = new UserModel(userData);
+    const savedUser = await user.save();
+
+    res.status(201).json({ success: true, user: savedUser });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Lấy danh sách user
 exports.getAllUsers = async (req, res) => {
   try {
-    // 1. Kiểm tra quyền truy cập (chỉ admin được xem danh sách)
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Only admins can view all users.' });
-    }
-
-    // 2. Lấy tham số phân trang từ query (nếu có)
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    // 3. Sử dụng hàm pagination để lấy thông tin phân trang
-    
-    const paginationInfo = await pagination(page, limit, UserModel, {});
-    // Note: Truyền tham số page, limit, model (UserModel), và query rỗng (lấy tất cả người dùng)
-
-    // 4. Lấy danh sách người dùng với phân trang
     const users = await UserModel.find()
-      .skip(skip) // Bỏ qua các bản ghi trước trang hiện tại
-      .limit(limit) // Giới hạn số bản ghi trả về
-      .populate('reference_id', 'name email phone_number') // Lấy thông tin tham chiếu
-      .populate('referred_by', 'name email phone_number') // Lấy thông tin người giới thiệu
-      .lean(); // Tăng hiệu suất
-
-    // 5. Trả về kết quả
-    res.status(200).json({
-      users,
-      pagination: paginationInfo,
-    });
-    logger.info(`Fetched all users by admin ${req.user.id}`, { page, limit });
-
-  } catch (err) {
-    logger.error('Error fetching users', { error: err.message, stack: err.stack });
-    res.status(500).json({ error: 'Internal server error', details: err.message });
-  }
-};
-// Lấy thông tin chi tiết một người dùng theo ID
-exports.getUserById = async (req, res) => {
-  try {
-    // 1. Lấy thông tin người dùng
-    const user = await UserModel.findById(req.params.id)
-      .populate('reference_id', 'name email phone_number')
-      .populate('referred_by', 'name email phone_number')
+      .skip(skip)
+      .limit(parseInt(limit))
       .lean();
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-      // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
-    }
 
-    // 2. Kiểm tra quyền: Chỉ admin hoặc chính người dùng đó được xem
-    if (req.user.role !== 'admin' && req.user.id !== req.params.id.toString()) {
-      return res.status(403).json({ error: 'Access denied. You can only view your own profile.' });
-      // Note: Đảm bảo chỉ admin hoặc chính người dùng đó mới xem được thông tin.
-    }
+    const total = await UserModel.countDocuments();
+    const pagination = {
+      total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+      next: page * limit < total ? parseInt(page) + 1 : null,
+      prev: page > 1 ? parseInt(page) - 1 : null,
+    };
 
-    // 3. Trả về kết quả
-    res.status(200).json(user);
-    logger.info(`Fetched user ${req.params.id} by ${req.user.id}`);
-    // Note: Trả về thông tin chi tiết của người dùng.
-
+    res.status(200).json({ success: true, users, pagination });
   } catch (err) {
-    logger.error('Error fetching user by ID', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
   }
 };
 
-// Cập nhật thông tin người dùng
-// exports.updateUser = async (req, res) => {
-//   try {
-//     // 1. Kiểm tra lỗi validation từ middleware
-//     const errors = validationResult(req);
-//     if (!errors.isEmpty()) {
-//       return res.status(400).json({ errors: errors.array() });
-//       // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ.
-//     }
-
-//     const userId = req.params.id;
-
-//     // 2. Kiểm tra quyền: Chỉ admin hoặc chính người dùng đó được cập nhật
-//     if (req.user.role !== 'admin' && req.user.id !== userId) {
-//       return res.status(403).json({ error: 'Access denied. You can only update your own profile.' });
-//       // Note: Đảm bảo chỉ admin hoặc chính người dùng đó mới cập nhật được thông tin.
-//     }
-
-//     // 3. Kiểm tra người dùng tồn tại
-//     const user = await UserModel.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ error: 'User not found' });
-//       // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
-//     }
-
-//     // 4. Mã hóa mật khẩu nếu có cập nhật password
-//     if (req.body.password) {
-//       const salt = await bcrypt.genSalt(10);
-//       req.body.password = await bcrypt.hash(req.body.password, salt);
-//       // Note: Mã hóa mật khẩu mới trước khi lưu.
-//     }
-
-//     // 5. Cập nhật thông tin người dùng
-//     const updatedUser = await UserModel.findByIdAndUpdate(
-//       userId,
-//       { $set: req.body },
-//       { new: true, runValidators: true }
-//     )
-//       .populate('reference_id', 'name email phone_number')
-//       .populate('referred_by', 'name email phone_number')
-//       .lean();
-
-//     // 6. Trả về kết quả
-//     res.status(200).json(updatedUser);
-//     logger.info(`User ${userId} updated by ${req.user.id}`, { updatedFields: Object.keys(req.body) });
-//     // Note: Trả về thông tin người dùng đã được cập nhật.
-
-//   } catch (err) {
-//     logger.error('Error updating user', { error: err.message, stack: err.stack });
-//     res.status(500).json({ error: 'Internal server error', details: err.message });
-//     // Note: Trả về lỗi 500 nếu có lỗi server.
-//   }
-// };
+// Cập nhật user
 exports.updateUser = async (req, res) => {
   try {
-    // 1. Kiểm tra lỗi validation từ middleware
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-      // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ (email không đúng định dạng, thiếu email, v.v.).
-    }
-
     const userId = req.params.id;
+    const { name, phone_number, role, address, specialization, status } = req.body;
 
-    // 2. Kiểm tra quyền: Chỉ admin hoặc chính người dùng đó được cập nhật
-    if (req.user.role !== 'admin' && req.user.id !== userId) {
-      return res.status(403).json({ error: 'Access denied. You can only update your own profile.' });
-      // Note: Đảm bảo chỉ admin hoặc chính người dùng đó mới cập nhật được thông tin.
-    }
-
-    // 3. Kiểm tra người dùng tồn tại
     const user = await UserModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-      // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
+      return res.status(404).json({ error: 'User not found.' });
     }
 
-    // 4. Kiểm tra email trùng lặp (nếu email thay đổi)
-    if (req.body.email && req.body.email !== user.email) {
-      const existingUserByEmail = await UserModel.findOne({ email: req.body.email }).lean();
-      if (existingUserByEmail) {
-        return res.status(400).json({ error: 'Email already exists.' });
-        // Note: Trả về lỗi 400 nếu email đã tồn tại trong database.
-      }
-    }
+    user.name = name || user.name;
+    user.phone_number = phone_number || user.phone_number;
+    user.role = role || user.role;
+    user.address = (role === 'customer' || role === 'technician') ? address || user.address : undefined;
+    user.specialization = role === 'technician' ? specialization || user.specialization : undefined;
+    user.status = status || user.status;
 
-    // 5. Kiểm tra phone_number trùng lặp (nếu phone_number thay đổi)
-    if (req.body.phone_number && req.body.phone_number !== user.phone_number) {
-      const existingUserByPhone = await UserModel.findOne({ phone_number: req.body.phone_number }).lean();
-      if (existingUserByPhone) {
-        return res.status(400).json({ error: 'Phone number already exists.' });
-        // Note: Trả về lỗi 400 nếu phone_number đã tồn tại trong database.
-      }
-    }
-
-    // 6. Mã hóa mật khẩu nếu có cập nhật password
-    if (req.body.password) {
-      const salt = await bcrypt.genSalt(10);
-      req.body.password = await bcrypt.hash(req.body.password, salt);
-      // Note: Mã hóa mật khẩu mới trước khi lưu.
-    }
-
-    // 7. Cập nhật thông tin người dùng
-    const updatedUser = await UserModel.findByIdAndUpdate(
-      userId,
-      { $set: req.body },
-      { new: true, runValidators: true }
-    )
-      .populate('reference_id', 'name email phone_number')
-      .populate('referred_by', 'name email phone_number')
-      .lean();
-
-    // 8. Trả về kết quả
+    const updatedUser = await user.save();
     res.status(200).json({ success: true, user: updatedUser });
-    logger.info(`User ${userId} updated by ${req.user.id}`, { updatedFields: Object.keys(req.body) });
-    // Note: Trả về status 200 với success: true và thông tin user đã cập nhật.
   } catch (err) {
-    logger.error('Error updating user', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
   }
 };
 
-// Xóa người dùng theo ID
+// Xóa user
 exports.deleteUser = async (req, res) => {
   try {
-    // 1. Kiểm tra quyền: Chỉ admin được xóa
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Only admins can delete users.' });
-      // Note: Đảm bảo chỉ admin mới được xóa tài khoản.
-    }
-
-    // 2. Xóa người dùng
-    const user = await UserModel.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+    const user = await UserModel.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-      // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
+      return res.status(404).json({ error: 'User not found.' });
     }
 
-    // 3. Trả về kết quả
-    res.status(200).json({ message: 'User deleted successfully' });
-    logger.info(`User ${req.params.id} deleted by admin ${req.user.id}`);
-    // Note: Trả về thông báo xóa thành công.
-
+    await user.remove();
+    res.status(200).json({ success: true, message: 'User deleted successfully.' });
   } catch (err) {
-    logger.error('Error deleting user', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
   }
 };
 
-// Đăng nhập người dùng và trả về JWT
-exports.loginUser = async (req, res) => {
+// Tạo đơn hàng (cho khách hàng)
+exports.createOrder = async (req, res) => {
   try {
-    // 1. Kiểm tra lỗi validation từ middleware
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
-      // Note: Trả về lỗi 400 nếu thiếu email hoặc password.
     }
 
-    const { email, password } = req.body;
-
-    // 2. Tìm người dùng theo email
-    const user = await UserModel.findOne({ email }).lean();
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-      // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
+    if (req.user.role !== 'customer') {
+      return res.status(403).json({ error: 'Access denied. Only customers can create orders.' });
     }
 
-    // 3. Kiểm tra trạng thái tài khoản
-    if (user.status === 'inactive') {
-      return res.status(403).json({ error: 'Account is inactive. Please contact admin.' });
-      // Note: Không cho phép đăng nhập nếu tài khoản bị khóa.
-    }
+    const { service_type, description, address } = req.body;
 
-    // 4. So sánh mật khẩu
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-      // Note: Trả về lỗi 400 nếu mật khẩu không khớp.
-    }
-
-    // 5. Cập nhật thời gian đăng nhập cuối cùng
-    await UserModel.updateOne({ _id: user._id }, { last_login: new Date() });
-    // Note: Ghi nhận thời gian đăng nhập để theo dõi hoạt động.
-
-    // 6. Tạo JWT
-    const token = jwt.sign(
-      { id: user._id, role: user.role }, // Payload: thông tin user
-      config.get('app.jwtSecret'), // Secret key từ config
-      { expiresIn: '1d' } // Token hết hạn sau 1 giờ
-    );
-
-    // 7. Trả về kết quả
-    const userResponse = {
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone_number: user.phone_number,
-      role: user.role,
-      last_login: user.last_login,
+    const orderData = {
+      customer_id: req.user._id,
+      service_type,
+      description,
+      address,
     };
-    res.status(200).json({ message: 'Login successful', token, user: userResponse });
-    logger.info(`User ${user.email} logged in successfully`, { userId: user._id });
-    // Note: Trả về token và thông tin người dùng (không bao gồm mật khẩu).
 
+    const order = new OrderModel(orderData);
+    const savedOrder = await order.save();
+
+    res.status(201).json({ success: true, order: savedOrder });
   } catch (err) {
-    logger.error('Error during login', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
   }
 };
 
-// Đặt lại mật khẩu (yêu cầu mã OTP hoặc email xác nhận)
-exports.resetPassword = async (req, res) => {
+// Xem danh sách đơn hàng cho thợ sửa chữa
+exports.getOrdersForTechnician = async (req, res) => {
   try {
-    // 1. Kiểm tra lỗi validation từ middleware
+    if (req.user.role !== 'technician') {
+      return res.status(403).json({ error: 'Access denied. Only technicians can view orders.' });
+    }
+
+    const orders = await OrderModel.find({
+      service_type: { $in: req.user.specialization },
+      status: 'pending',
+      technician_id: null,
+    })
+      .populate('customer_id', 'name email phone_number')
+      .lean();
+
+    res.status(200).json({ success: true, orders });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Nhận đơn hàng
+exports.acceptOrder = async (req, res) => {
+  try {
+    if (req.user.role !== 'technician') {
+      return res.status(403).json({ error: 'Access denied. Only technicians can accept orders.' });
+    }
+
+    const order = await OrderModel.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    if (order.status !== 'pending' || order.technician_id) {
+      return res.status(400).json({ error: 'Order is not available for acceptance.' });
+    }
+
+    if (!req.user.specialization.includes(order.service_type)) {
+      return res.status(403).json({ error: 'Order does not match your specialization.' });
+    }
+
+    order.technician_id = req.user._id;
+    order.status = 'accepted';
+    await order.save();
+
+    res.status(200).json({ success: true, order });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Từ chối đơn hàng
+exports.rejectOrder = async (req, res) => {
+  try {
+    if (req.user.role !== 'technician') {
+      return res.status(403).json({ error: 'Access denied. Only technicians can reject orders.' });
+    }
+
+    const order = await OrderModel.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    if (order.technician_id && order.technician_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'You are not assigned to this order.' });
+    }
+
+    order.technician_id = null;
+    order.status = 'pending';
+    await order.save();
+
+    res.status(200).json({ success: true, order });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Tạo bài viết (content writer)
+exports.createPost = async (req, res) => {
+  try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
-      // Note: Trả về lỗi 400 nếu dữ liệu không hợp lệ.
     }
 
-    const { email, newPassword, otp } = req.body;
-
-    // 2. Tìm người dùng theo email
-    const user = await UserModel.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-      // Note: Trả về lỗi 404 nếu không tìm thấy người dùng.
+    if (req.user.role !== 'content_writer') {
+      return res.status(403).json({ error: 'Access denied. Only content writers can create posts.' });
     }
 
-    // 3. Kiểm tra mã OTP (giả định bạn đã gửi OTP qua email hoặc SMS)
-    // TODO: Thêm logic kiểm tra OTP (ví dụ: lưu OTP tạm thời trong database và so sánh)
-    if (!otp) {
-      return res.status(400).json({ error: 'OTP is required for password reset.' });
-      // Note: Yêu cầu OTP để xác minh (cần tích hợp hệ thống gửi OTP trước).
-    }
+    const { title, content, status } = req.body;
+    const postData = {
+      title,
+      content,
+      author_id: req.user._id,
+      status: status || 'draft',
+    };
 
-    // 4. Mã hóa mật khẩu mới
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const post = new PostModel(postData);
+    const savedPost = await post.save();
 
-    // 5. Cập nhật mật khẩu
-    user.password = hashedPassword;
-    await user.save();
-
-    // 6. Trả về kết quả
-    res.status(200).json({ message: 'Password reset successful' });
-    logger.info(`Password reset for user ${email}`);
-    // Note: Trả về thông báo thành công.
-
+    res.status(201).json({ success: true, post: savedPost });
   } catch (err) {
-    logger.error('Error resetting password', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error', details: err.message });
-    // Note: Trả về lỗi 500 nếu có lỗi server.
+  }
+};
+
+// Lấy danh sách bài viết
+exports.getPosts = async (req, res) => {
+  try {
+    if (req.user.role !== 'content_writer') {
+      return res.status(403).json({ error: 'Access denied. Only content writers can view posts.' });
+    }
+
+    const posts = await PostModel.find({ author_id: req.user._id }).lean();
+    res.status(200).json({ success: true, posts });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Cập nhật bài viết
+exports.updatePost = async (req, res) => {
+  try {
+    if (req.user.role !== 'content_writer') {
+      return res.status(403).json({ error: 'Access denied. Only content writers can update posts.' });
+    }
+
+    const post = await PostModel.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    if (post.author_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied. You can only update your own posts.' });
+    }
+
+    const { title, content, status } = req.body;
+    post.title = title || post.title;
+    post.content = content || post.content;
+    post.status = status || post.status;
+    await post.save();
+
+    res.status(200).json({ success: true, post });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Xóa bài viết
+exports.deletePost = async (req, res) => {
+  try {
+    if (req.user.role !== 'content_writer') {
+      return res.status(403).json({ error: 'Access denied. Only content writers can delete posts.' });
+    }
+
+    const post = await PostModel.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    if (post.author_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied. You can only delete your own posts.' });
+    }
+
+    await post.remove();
+    res.status(200).json({ success: true, message: 'Post deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Gửi tin nhắn
+exports.sendMessage = async (req, res) => {
+  try {
+    const { receiver_id, order_id, content } = req.body;
+
+    if (req.user.role === 'customer') {
+      const order = await OrderModel.findById(order_id);
+      if (!order || order.customer_id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied. You can only message related to your orders.' });
+      }
+      if (order.technician_id && order.technician_id.toString() !== receiver_id) {
+        const receiver = await UserModel.findById(receiver_id);
+        if (!receiver || receiver.role !== 'admin') {
+          return res.status(403).json({ error: 'You can only message the assigned technician or admin.' });
+        }
+      }
+    } else if (req.user.role === 'technician') {
+      const order = await OrderModel.findById(order_id);
+      if (!order || order.technician_id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'Access denied. You can only message related to your orders.' });
+      }
+      if (order.customer_id.toString() !== receiver_id) {
+        const receiver = await UserModel.findById(receiver_id);
+        if (!receiver || receiver.role !== 'admin') {
+          return res.status(403).json({ error: 'You can only message the customer or admin.' });
+        }
+      }
+    } else if (req.user.role === 'admin') {
+      const receiver = await UserModel.findById(receiver_id);
+      if (!receiver || !['customer', 'technician'].includes(receiver.role)) {
+        return res.status(403).json({ error: 'Admin can only message customers or technicians.' });
+      }
+    } else {
+      return res.status(403).json({ error: 'Access denied. Your role cannot send messages.' });
+    }
+
+    const messageData = {
+      sender_id: req.user._id,
+      receiver_id,
+      order_id: order_id || null,
+      content,
+    };
+
+    const message = new MessageModel(messageData);
+    const savedMessage = await message.save();
+
+    res.status(201).json({ success: true, message: savedMessage });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Xem tin nhắn
+exports.getMessages = async (req, res) => {
+  try {
+    const messages = await MessageModel.find({
+      $or: [
+        { sender_id: req.user._id },
+        { receiver_id: req.user._id },
+      ],
+    })
+      .populate('sender_id', 'name role')
+      .populate('receiver_id', 'name role')
+      .populate('order_id', 'service_type status')
+      .lean();
+
+    res.status(200).json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

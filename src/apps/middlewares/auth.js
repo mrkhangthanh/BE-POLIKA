@@ -1,19 +1,31 @@
 const jwt = require('jsonwebtoken');
+const UserModel = require('../models/user');
 const config = require('config');
 
-module.exports =  (req, res, next) => {
-  // Lấy token từ header
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
-  }
-
+const authMiddleware = async (req, res, next) => {
   try {
-    // Xác minh token
-    const decoded = jwt.verify(token, config.get('app.jwtSecret'));
-    req.user = decoded; // Lưu thông tin user vào req (id, role)
-    next(); // Chuyển request đến handler tiếp theo
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Access denied. No token provided.' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await UserModel.findById(decoded.id).lean();
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({ error: 'Access denied. Your account is inactive.' });
+    }
+
+    req.user = user;
+    req.token = token;
+    next();
   } catch (err) {
-    res.status(400).json({ error: 'Invalid token.' });
+    res.status(401).json({ error: 'Invalid token.', details: err.message });
   }
 };
+
+module.exports = authMiddleware;
