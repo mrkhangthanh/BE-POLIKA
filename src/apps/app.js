@@ -33,7 +33,11 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
-
+// Middleware xử lý lỗi 404
+app.use((req, res, next) => {
+  console.log(`Route not found: ${req.method} ${req.url}`); // Thêm log để debug
+  res.status(404).json({ error: `Cannot ${req.method} ${req.url}` });
+});
 app.use(limiter);
 app.use(express.json());
 
