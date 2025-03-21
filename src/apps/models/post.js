@@ -20,6 +20,15 @@ const postSchema = new mongoose.Schema({
     enum: ['draft', 'published', 'archived'],
     default: 'draft'
   },
+  tags: {
+    type: [String],
+    default: [] // Ví dụ: ['news', 'tutorial', 'repair']
+  },
+  views: {
+    type: Number,
+    default: 0, // Đếm số lượt xem bài viết
+    min: [0, 'Views cannot be negative']
+  },
   created_at: {
     type: Date,
     default: Date.now

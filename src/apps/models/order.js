@@ -4,63 +4,51 @@ const orderSchema = new mongoose.Schema({
   customer_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Users',
-    required: true
+    required: true,
   },
   technician_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Users',
-    default: null
+    default: null,
   },
   service_type: {
     type: String,
-    required: true
+    enum: {
+      values: ['plumbing', 'electrical', 'carpentry', 'hvac'],
+      message: 'Service type must be one of: plumbing, electrical, carpentry, hvac',
+    },
+    required: true,
   },
   description: {
     type: String,
-    required: true
+    required: true,
   },
   address: {
-    street: {
-      type: String,
-      required: true
-    },
-    city: {
-      type: String,
-      required: true
-    },
-    district: {
-      type: String,
-      required: true
-    },
-    ward: {
-      type: String,
-      required: true
-    },
-    country: {
-      type: String,
-      default: 'Vietnam'
-    }
+    street: { type: String, required: true },
+    city: { type: String, required: true },
+    district: { type: String, required: true },
+    ward: { type: String, required: true },
+    country: { type: String, default: 'Vietnam' },
   },
   status: {
     type: String,
     enum: ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'],
-    default: 'pending'
+    default: 'pending',
   },
-  created_at: {
-    type: Date,
-    default: Date.now
+  price: {
+    type: Number,
+    default: 0, // Giá dịch vụ, technician có thể cập nhật sau khi nhận đơn
+    min: [0, 'Price cannot be negative'],
   },
-  updated_at: {
-    type: Date,
-    default: Date.now
-  }
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now },
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
   indexes: [
     { key: { customer_id: 1 } },
     { key: { technician_id: 1 } },
-    { key: { service_type: 1 } }
-  ]
+    { key: { service_type: 1 } },
+  ],
 });
 
 const OrderModel = mongoose.model('Orders', orderSchema, 'orders');

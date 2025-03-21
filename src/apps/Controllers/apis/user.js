@@ -43,7 +43,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, address } = req.body;
+    const { name, email, password, phone_number, address, avatar } = req.body;
 
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
     if (existingUser) {
@@ -57,6 +57,7 @@ exports.register = async (req, res) => {
       phone_number,
       role: 'customer',
       address,
+      avatar: avatar || null, // Thêm avatar nếu có
     };
 
     const user = new UserModel(userData);
@@ -77,7 +78,7 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, role, address, specialization, referred_by } = req.body;
+    const { name, email, password, phone_number, role, address, specialization, referred_by, avatar } = req.body;
 
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
     if (existingUser) {
@@ -88,8 +89,15 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer and technician roles.' });
     }
 
-    if (role === 'technician' && (!specialization || !Array.isArray(specialization) || specialization.length === 0)) {
-      return res.status(400).json({ error: 'Specialization is required for technician role.' });
+    if (role === 'technician') {
+      if (!specialization || !Array.isArray(specialization) || specialization.length === 0) {
+        return res.status(400).json({ error: 'Specialization is required for technician role.' });
+      }
+      // Validate specialization
+      const validSpecializations = ['plumbing', 'electrical', 'carpentry', 'hvac'];
+      if (!specialization.every(spec => validSpecializations.includes(spec))) {
+        return res.status(400).json({ error: 'Invalid specialization. Must be one of: plumbing, electrical, carpentry, hvac' });
+      }
     }
 
     const userData = {
@@ -101,6 +109,7 @@ exports.createUser = async (req, res) => {
       address: role === 'customer' || role === 'technician' ? address : undefined,
       specialization: role === 'technician' ? specialization : undefined,
       referred_by,
+      avatar: avatar || null, // Thêm avatar nếu có
     };
 
     const user = new UserModel(userData);
@@ -140,15 +149,36 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+// Lấy thông tin user theo ID
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.params.id).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    res.status(200).json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
 // Cập nhật user
 exports.updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { name, phone_number, role, address, specialization, status } = req.body;
+    const { name, phone_number, role, address, specialization, status, avatar } = req.body;
 
     const user = await UserModel.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (role === 'technician' && specialization) {
+      const validSpecializations = ['plumbing', 'electrical', 'carpentry', 'hvac'];
+      if (!specialization.every(spec => validSpecializations.includes(spec))) {
+        return res.status(400).json({ error: 'Invalid specialization. Must be one of: plumbing, electrical, carpentry, hvac' });
+      }
     }
 
     user.name = name || user.name;
@@ -157,6 +187,7 @@ exports.updateUser = async (req, res) => {
     user.address = (role === 'customer' || role === 'technician') ? address || user.address : undefined;
     user.specialization = role === 'technician' ? specialization || user.specialization : undefined;
     user.status = status || user.status;
+    user.avatar = avatar !== undefined ? avatar : user.avatar; // Cập nhật avatar nếu có
 
     const updatedUser = await user.save();
     res.status(200).json({ success: true, user: updatedUser });
@@ -195,11 +226,18 @@ exports.createOrder = async (req, res) => {
 
     const { service_type, description, address } = req.body;
 
+    // Validate service_type
+    const validServiceTypes = ['plumbing', 'electrical', 'carpentry', 'hvac'];
+    if (!validServiceTypes.includes(service_type)) {
+      return res.status(400).json({ error: 'Invalid service type. Must be one of: plumbing, electrical, carpentry, hvac' });
+    }
+
     const orderData = {
       customer_id: req.user._id,
       service_type,
       description,
       address,
+      price: 0, // Giá mặc định là 0, technician sẽ cập nhật sau
     };
 
     const order = new OrderModel(orderData);
@@ -239,6 +277,7 @@ exports.acceptOrder = async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Only technicians can accept orders.' });
     }
 
+    const { price } = req.body; // Technician có thể gửi giá khi nhận đơn
     const order = await OrderModel.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
@@ -254,6 +293,13 @@ exports.acceptOrder = async (req, res) => {
 
     order.technician_id = req.user._id;
     order.status = 'accepted';
+    if (price !== undefined) {
+      if (typeof price !== 'number' || price < 0) {
+        return res.status(400).json({ error: 'Price must be a non-negative number.' });
+      }
+      order.price = price; // Cập nhật giá nếu có
+    }
+
     await order.save();
 
     res.status(200).json({ success: true, order });
@@ -280,6 +326,7 @@ exports.rejectOrder = async (req, res) => {
 
     order.technician_id = null;
     order.status = 'pending';
+    order.price = 0; // Reset giá khi từ chối
     await order.save();
 
     res.status(200).json({ success: true, order });
@@ -300,12 +347,14 @@ exports.createPost = async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Only content writers can create posts.' });
     }
 
-    const { title, content, status } = req.body;
+    const { title, content, status, tags } = req.body;
     const postData = {
       title,
       content,
       author_id: req.user._id,
       status: status || 'draft',
+      tags: tags || [], // Thêm tags nếu có
+      views: 0, // Khởi tạo views
     };
 
     const post = new PostModel(postData);
@@ -331,6 +380,32 @@ exports.getPosts = async (req, res) => {
   }
 };
 
+// Lấy bài viết theo ID (tăng views)
+exports.getPostById = async (req, res) => {
+  try {
+    if (req.user.role !== 'content_writer') {
+      return res.status(403).json({ error: 'Access denied. Only content writers can view posts.' });
+    }
+
+    const post = await PostModel.findById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found.' });
+    }
+
+    if (post.author_id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied. You can only view your own posts.' });
+    }
+
+    // Tăng số lượt xem
+    post.views += 1;
+    await post.save();
+
+    res.status(200).json({ success: true, post });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
 // Cập nhật bài viết
 exports.updatePost = async (req, res) => {
   try {
@@ -347,10 +422,12 @@ exports.updatePost = async (req, res) => {
       return res.status(403).json({ error: 'Access denied. You can only update your own posts.' });
     }
 
-    const { title, content, status } = req.body;
+    const { title, content, status, tags } = req.body;
     post.title = title || post.title;
     post.content = content || post.content;
     post.status = status || post.status;
+    post.tags = tags !== undefined ? tags : post.tags; // Cập nhật tags nếu có
+
     await post.save();
 
     res.status(200).json({ success: true, post });
@@ -385,7 +462,16 @@ exports.deletePost = async (req, res) => {
 // Gửi tin nhắn
 exports.sendMessage = async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const { receiver_id, order_id, content } = req.body;
+
+    if (content.length > 1000) {
+      return res.status(400).json({ error: 'Message content cannot exceed 1000 characters.' });
+    }
 
     if (req.user.role === 'customer') {
       const order = await OrderModel.findById(order_id);
@@ -423,6 +509,7 @@ exports.sendMessage = async (req, res) => {
       receiver_id,
       order_id: order_id || null,
       content,
+      is_read: false, // Khởi tạo tin nhắn chưa đọc
     };
 
     const message = new MessageModel(messageData);
@@ -447,6 +534,12 @@ exports.getMessages = async (req, res) => {
       .populate('receiver_id', 'name role')
       .populate('order_id', 'service_type status')
       .lean();
+
+    // Đánh dấu tin nhắn nhận được là đã đọc
+    await MessageModel.updateMany(
+      { receiver_id: req.user._id, is_read: false },
+      { $set: { is_read: true } }
+    );
 
     res.status(200).json({ success: true, messages });
   } catch (err) {

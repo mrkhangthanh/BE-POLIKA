@@ -69,7 +69,15 @@ const userSchema = new mongoose.Schema({
     required: function () {
       return this.role === 'technician';
     },
-    default: []
+    default: [],
+    enum: {
+      values: ['plumbing', 'electrical', 'carpentry', 'hvac'],
+      message: 'Specialization must be one of: plumbing, electrical, carpentry, hvac'
+    }
+  },
+  avatar: {
+    type: String,
+    default: null // Có thể lưu URL ảnh đại diện, ví dụ: "https://example.com/avatar.jpg"
   },
   referred_by: {
     type: mongoose.Schema.Types.ObjectId,

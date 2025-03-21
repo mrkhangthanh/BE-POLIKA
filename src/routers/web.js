@@ -26,7 +26,7 @@ router.post('/login', userController.login);
 
 // Quản lý user (admin và manager)
 router.post(
-  '/createUser ',
+  '/createUser',
   authMiddleware,
   requireRole(['admin'], { readOnly: false }),
   [
@@ -71,6 +71,8 @@ router.post(
   ],
   userController.createPost
 );
+
+router.get('/posts/:id', authMiddleware, userController.getPostById);
 
 router.get('/posts', authMiddleware, userController.getPosts);
 router.put('/posts/:id', authMiddleware, userController.updatePost);
