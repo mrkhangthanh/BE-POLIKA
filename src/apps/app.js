@@ -10,7 +10,7 @@ const config = require('config');
 const server = http.createServer(app);
 const io = new Server(server);
 
-
+// khôi phục cors trong môi trường product. sau...
 // app.use(cors({
 //     origin: 'http://localhost:3000', // Chỉ cho phép origin từ localhost:3000
 //     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE','OPTIONS'], // Các phương thức được phép
@@ -34,15 +34,16 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
+
+app.use(limiter);
+app.use(express.json());
+
+//ket noi router
+app.use(`${config.get('app.prefixApiVersion')}`,require(`${__dirname}/../routers/web`));
+
 // Middleware xử lý lỗi 404
 app.use((req, res, next) => {
   console.log(`Route not found: ${req.method} ${req.url}`); // Thêm log để debug
   res.status(404).json({ error: `Cannot ${req.method} ${req.url}` });
 });
-app.use(limiter);
-app.use(express.json());
-
-app.use(`${config.get('app.prefixApiVersion')}`,require(`${__dirname}/../routers/web`));
-
-
 module.exports = server;
