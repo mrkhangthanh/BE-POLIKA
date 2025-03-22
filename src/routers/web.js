@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../apps/Controllers/apis/user');
+const agentController = require('../apps/Controllers/apis/agents/agentController');
 const authMiddleware = require('../apps/middlewares/auth');
 const requireRole = require('../apps/middlewares/requireRole');
 const { body, validationResult } = require('express-validator');
@@ -33,7 +34,7 @@ router.post(
     body('email').isEmail().withMessage('Invalid email format'),
     body('password').notEmpty().withMessage('Password is required'),
     body('phone_number').matches(/^[0-9]{10,11}$/).withMessage('Phone number must be 10-11 digits'),
-    body('role').isIn(['admin', 'manager', 'content_writer', 'technician', 'customer']).withMessage('Invalid role'),
+    body('role').isIn(['admin', 'manager', 'content_writer', 'technician', 'customer','agent']).withMessage('Invalid role'),
   ],
   userController.createUser 
 );
@@ -90,5 +91,9 @@ router.post(
 );
 
 router.get('/messages', authMiddleware, userController.getMessages);
+
+// API cho đại lý
+router.get('/agent/customers', authMiddleware, requireRole(['agent'], { readOnly: true }), agentController.getCustomersByAgent);
+router.get('/agent/orders', authMiddleware, requireRole(['agent'], { readOnly: true }), agentController.getOrdersByAgentCustomers);
 
 module.exports = router;

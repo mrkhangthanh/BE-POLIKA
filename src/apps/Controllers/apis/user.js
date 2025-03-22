@@ -43,11 +43,19 @@ exports.register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, address, avatar } = req.body;
+    const { name, email, password, phone_number, address, avatar, referred_by } = req.body;
 
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
     if (existingUser) {
       return res.status(400).json({ error: 'Email or phone number already exists.' });
+    }
+
+    // Kiểm tra referred_by (nếu có)
+    if (referred_by) {
+      const referrer = await UserModel.findById(referred_by).lean();
+      if (!referrer || referrer.role !== 'agent') {
+        return res.status(400).json({ error: 'Invalid referrer. Referrer must be an agent.' });
+      }
     }
 
     const userData = {
@@ -57,7 +65,8 @@ exports.register = async (req, res) => {
       phone_number,
       role: 'customer',
       address,
-      avatar: avatar || null, // Thêm avatar nếu có
+      avatar: avatar || null,
+      referred_by: referred_by || null, // Lưu ID của đại lý (nếu có)
     };
 
     const user = new UserModel(userData);

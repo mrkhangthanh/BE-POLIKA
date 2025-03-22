@@ -1,15 +1,21 @@
-const requireRole = (roles = [], permissions = {}) => {
+const requireRole = (roles, options = { readOnly: false }) => {
   return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: `Access denied. Only ${roles.join(', ')} are allowed.` });
+      return res.status(403).json({ error: 'Access denied.' });
     }
 
-    if (req.user.status !== 'active') {
-      return res.status(403).json({ error: 'Access denied. Your account is inactive.' });
-    }
-
-    if (permissions.readOnly && ['POST', 'PUT', 'DELETE'].includes(req.method)) {
-      return res.status(403).json({ error: 'Access denied. You only have read-only access.' });
+    if (!options.readOnly && req.method !== 'GET') {
+      if (!['admin', 'manager'].includes(req.user.role)) {
+        // Đại lý chỉ được phép đọc, không được ghi
+        if (req.user.role === 'agent') {
+          return res.status(403).json({ error: 'Write access denied for agents.' });
+        }
+        return res.status(403).json({ error: 'Write access denied.' });
+      }
     }
 
     next();
