@@ -28,19 +28,31 @@ exports.login = async (req, res) => {
       return res.status(403).json({ error: 'Your account is inactive.' });
     }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    await UserModel.updateOne({ _id: user._id }, { last_login: new Date() });
+    // Tạo access token (hết hạn sau 1 giờ)
+    const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    // [THÊM] Tạo refresh token (hết hạn sau 7 ngày)
+    const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // [THÊM] Lưu refresh token vào database
+    await UserModel.updateOne(
+      { _id: user._id },
+      {
+        refresh_token: refreshToken,
+        refresh_token_expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 ngày
+        last_login: new Date(),
+      }
+    );
 
     const loginMethod = /^\S+@\S+\.\S+$/.test(loginValue) ? 'email' : 'phone_number';
     logger.info(`User logged in: ${loginValue} (ID: ${user._id}) via ${loginMethod}`);
 
-    res.status(200).json({ success: true, token, user });
-  } catch (err) {
-    logger.error(`Login error: ${err.message}`);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
-  }
+ // [SỬA] Trả về cả access token và refresh token
+ res.status(200).json({ success: true, accessToken, refreshToken, user: user });
+} catch (err) {
+  logger.error(`Login error: ${err.message}`);
+  res.status(500).json({ error: 'Internal server error', details: err.message });
+}
 };
-
 // Đăng ký (cho khách hàng)
 exports.register = async (req, res) => {
   try {
@@ -78,13 +90,26 @@ exports.register = async (req, res) => {
     const user = new UserModel(userData);
     const savedUser = await user.save();
 
+    // Tạo access token và refresh token sau khi đăng ký
+    const accessToken = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const refreshToken = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    // [THÊM] Lưu refresh token vào database
+    await UserModel.updateOne(
+      { _id: savedUser._id },
+      {
+        refresh_token: refreshToken,
+        refresh_token_expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 ngày
+      }
+    );
+
+
  // [THÊM] Ghi log đăng ký
     logger.info(`User registered: ${email} (ID: ${savedUser._id})`);
 
-    const token = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.status(201).json({ success: true, token, user: savedUser });
+    // [SỬA] Trả về cả access token và refresh token
+    res.status(201).json({ success: true, accessToken, refreshToken, user: savedUser.toObject() });
   } catch (err) {
-    // [THÊM] Ghi log lỗi
     logger.error(`Register error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
@@ -149,6 +174,55 @@ exports.resetPassword = async (req, res) => {
     res.status(200).json({ success: true, message: 'Password has been reset successfully.' });
   } catch (err) {
     logger.error(`Reset password error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// [THÊM] Làm mới access token
+exports.refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    // Xác thực refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const user = await UserModel.findOne({
+      _id: decoded.id,
+      refresh_token: refreshToken,
+      refresh_token_expires: { $gt: Date.now() },
+    });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token.' });
+    }
+
+    // Tạo access token mới
+    const newAccessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    logger.info(`Access token refreshed for user: ${user.email} (ID: ${user._id})`);
+
+    res.status(200).json({ success: true, accessToken: newAccessToken });
+  } catch (err) {
+    logger.error(`Refresh token error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// [THÊM] Đăng xuất
+exports.logout = async (req, res) => {
+  try {
+    // Lấy user từ middleware auth (giả sử bạn đã có middleware kiểm tra access token)
+    const userId = req.user.id; // req.user được gán bởi middleware auth
+
+    // Xóa refresh token
+    await UserModel.updateOne(
+      { _id: userId },
+      { refresh_token: null, refresh_token_expires: null }
+    );
+
+    logger.info(`User logged out: (ID: ${userId})`);
+
+    res.status(200).json({ success: true, message: 'Logged out successfully.' });
+  } catch (err) {
+    logger.error(`Logout error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

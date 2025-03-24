@@ -69,7 +69,7 @@ exports.loginValidation = [
       .withMessage('Password is required.'),
   ];
 
-// [THÊM] Validation cho quên mật khẩu
+//  Validation cho quên mật khẩu
 exports.forgotPasswordValidation = [
     body('identifier')
       .optional()
@@ -95,7 +95,7 @@ exports.forgotPasswordValidation = [
       }),
   ];
   
-  // [THÊM] Validation cho reset mật khẩu
+  //  Validation cho reset mật khẩu
   exports.resetPasswordValidation = [
     body('token')
       .notEmpty()
@@ -106,3 +106,10 @@ exports.forgotPasswordValidation = [
       .isLength({ min: 8 })
       .withMessage('New password must be at least 8 characters.'),
   ];
+
+  //  Validation cho refresh token
+exports.refreshTokenValidation = [
+    body('refreshToken')
+      .notEmpty()
+      .withMessage('Refresh token is required.'),
+  ];    

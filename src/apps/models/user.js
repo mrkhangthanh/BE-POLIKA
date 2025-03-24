@@ -100,6 +100,14 @@ const userSchema = new mongoose.Schema({
   reset_password_expires: { 
     type: Date, 
     default: null },
+    refresh_token: {
+       type: String,
+        default: null 
+      },
+  refresh_token_expires: {
+     type: Date,
+      default: null 
+    },
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }, // [Cập nhật] Sử dụng timestamps của Mongoose
   indexes: [ // [Cập nhật] Thêm indexes để tối ưu truy vấn
