@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const userController = require('../apps/Controllers/apis/user');
-const agentController = require('../apps/Controllers/apis/agents/agentController');
+const authController = require('../apps/Controllers/apis/authController');
+const userController = require('../apps/Controllers/apis/userController');
+const orderController = require('../apps/Controllers/apis/orderController');
+const postController = require('../apps/Controllers/apis/postController');
+const messageController = require('../apps/Controllers/apis/messageController');
+const agentController = require('../apps/Controllers/apis/agentController');
 const authMiddleware = require('../apps/middlewares/auth');
 const requireRole = require('../apps/middlewares/requireRole');
 const { body, validationResult } = require('express-validator');
@@ -19,11 +23,11 @@ router.post(
     body('address.district').notEmpty().withMessage('District is required'),
     body('address.ward').notEmpty().withMessage('Ward is required'),
   ],
-  userController.register
+  authController.register
 );
 
 // Đăng nhập
-router.post('/login', userController.login);
+router.post('/login', authController.login);
 
 // Quản lý user (admin và manager)
 router.post(
@@ -40,6 +44,7 @@ router.post(
 );
 
 router.get('/users', authMiddleware, requireRole(['admin', 'manager'], { readOnly: true }), userController.getAllUsers);
+router.get('/users/:id', authMiddleware, requireRole(['admin', 'manager'], { readOnly: true }), userController.getUserById);
 router.put('/users/:id', authMiddleware, requireRole(['admin'], { readOnly: false }), userController.updateUser );
 router.delete('/users/:id', authMiddleware, requireRole(['admin'], { readOnly: false }), userController.deleteUser );
 
@@ -55,12 +60,12 @@ router.post(
     body('address.district').notEmpty().withMessage('District is required'),
     body('address.ward').notEmpty().withMessage('Ward is required'),
   ],
-  userController.createOrder
+  orderController.createOrder
 );
 
-router.get('/technician/orders', authMiddleware, userController.getOrdersForTechnician);
-router.post('/technician/orders/:id/accept', authMiddleware, userController.acceptOrder);
-router.post('/technician/orders/:id/reject', authMiddleware, userController.rejectOrder);
+router.get('/technician/orders', authMiddleware, orderController.getOrdersForTechnician);
+router.post('/technician/orders/:id/accept', authMiddleware, orderController.acceptOrder);
+router.post('/technician/orders/:id/reject', authMiddleware, orderController.rejectOrder);
 
 // Quản lý bài viết
 router.post(
@@ -70,14 +75,14 @@ router.post(
     body('title').notEmpty().withMessage('Title is required'),
     body('content').notEmpty().withMessage('Content is required'),
   ],
-  userController.createPost
+  postController.createPost
 );
 
-router.get('/posts/:id', authMiddleware, userController.getPostById);
+router.get('/posts/:id', authMiddleware, postController.getPostById);
 
-router.get('/posts', authMiddleware, userController.getPosts);
-router.put('/posts/:id', authMiddleware, userController.updatePost);
-router.delete('/posts/:id', authMiddleware, userController.deletePost);
+router.get('/posts', authMiddleware, postController.getPosts);
+router.put('/posts/:id', authMiddleware, postController.updatePost);
+router.delete('/posts/:id', authMiddleware, postController.deletePost);
 
 // Nhắn tin
 router.post(
@@ -87,10 +92,10 @@ router.post(
     body('receiver_id').notEmpty().withMessage('Receiver ID is required'),
     body('content').notEmpty().withMessage('Message content is required'),
   ],
-  userController.sendMessage
+  messageController.sendMessage
 );
 
-router.get('/messages', authMiddleware, userController.getMessages);
+router.get('/messages', authMiddleware, messageController.getMessages);
 
 // API cho đại lý
 router.get('/agent/customers', authMiddleware, requireRole(['agent'], { readOnly: true }), agentController.getCustomersByAgent);

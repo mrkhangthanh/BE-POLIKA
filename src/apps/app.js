@@ -39,7 +39,7 @@ app.use(limiter);
 app.use(express.json());
 
 //ket noi router
-app.use(`${config.get('app.prefixApiVersion')}`,require(`${__dirname}/../routers/web`));
+app.use(`${config.get('app.prefixApiVersion')}`,require(`${__dirname}/../routers/index`));
 
 // Middleware xử lý lỗi 404
 app.use((req, res, next) => {
