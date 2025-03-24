@@ -52,12 +52,57 @@ exports.registerValidation = [
 
 
 exports.loginValidation = [
-    body('email')
+    body('identifier')
       .notEmpty()
-      .withMessage('Email is required.')
-      .isEmail()
-      .withMessage('Invalid email format.'),
+      .withMessage('Identifier (email or phone number) is required.')
+      .custom((value) => {
+        // Kiểm tra xem identifier có phải là email hoặc số điện thoại hợp lệ
+        const isEmail = /^\S+@\S+\.\S+$/.test(value);
+        const isPhoneNumber = /^[0-9]{10,11}$/.test(value);
+        if (!isEmail && !isPhoneNumber) {
+          throw new Error('Identifier must be a valid email or a phone number (10-11 digits).');
+        }
+        return true;
+      }),
     body('password')
       .notEmpty()
       .withMessage('Password is required.'),
+  ];
+
+// [THÊM] Validation cho quên mật khẩu
+exports.forgotPasswordValidation = [
+    body('identifier')
+      .optional()
+      .custom((value) => {
+        if (!value) return true;
+        const isEmail = /^\S+@\S+\.\S+$/.test(value);
+        const isPhoneNumber = /^[0-9]{10,11}$/.test(value);
+        if (!isEmail && !isPhoneNumber) {
+          throw new Error('Identifier must be a valid email or a phone number (10-11 digits).');
+        }
+        return true;
+      }),
+    body('email')
+      .optional()
+      .isEmail()
+      .withMessage('Invalid email format.'),
+    body()
+      .custom((value, { req }) => {
+        if (!req.body.identifier && !req.body.email) {
+          throw new Error('Either identifier or email is required.');
+        }
+        return true;
+      }),
+  ];
+  
+  // [THÊM] Validation cho reset mật khẩu
+  exports.resetPasswordValidation = [
+    body('token')
+      .notEmpty()
+      .withMessage('Reset token is required.'),
+    body('newPassword')
+      .notEmpty()
+      .withMessage('New password is required.')
+      .isLength({ min: 8 })
+      .withMessage('New password must be at least 8 characters.'),
   ];
