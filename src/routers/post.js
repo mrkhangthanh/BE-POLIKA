@@ -1,20 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const postController = require('../apps/Controllers/apis/postController');
+const postValidator = require('../validators/postValidator');
 const authMiddleware = require('../apps/middlewares/auth');
 const requireRole = require('../apps/middlewares/requireRole');
 const { body, validationResult } = require('express-validator');
 
 // Quản lý bài viết
-router.post(
-    '/posts',
-    authMiddleware,
-    [
-      body('title').notEmpty().withMessage('Title is required'),
-      body('content').notEmpty().withMessage('Content is required'),
-    ],
-    postController.createPost
-  );
+router.post('/posts',authMiddleware,postValidator.createPostValidation,postController.createPost);
   
   router.get('/posts/:id', authMiddleware, postController.getPostById);
   
