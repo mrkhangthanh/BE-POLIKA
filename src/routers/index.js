@@ -11,11 +11,11 @@ const messageRoutes = require('./message');
 const agentRoutes = require('./agent');
 
 // Định nghĩa các route
-router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/orders', orderRoutes);
-router.use('/posts', postRoutes);
-router.use('/messages', messageRoutes);
-router.use('/agent', agentRoutes);
+router.use(authRoutes);
+router.use(userRoutes);
+router.use(orderRoutes);
+router.use(postRoutes);
+router.use(messageRoutes);
+router.use(agentRoutes);
 
 module.exports = router;
