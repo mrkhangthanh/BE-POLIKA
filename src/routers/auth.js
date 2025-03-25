@@ -39,4 +39,13 @@ router.get(
   authController.getStatusHistory
 );
 
+// [THÊM] Route cập nhật hồ sơ
+router.patch(
+  '/update-profile',
+  authMiddleware,
+  authValidator.updateProfileValidation,
+  handleValidationErrors,
+  authController.updateProfile
+);
+
 module.exports = router;

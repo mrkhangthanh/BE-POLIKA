@@ -64,14 +64,15 @@ exports.register = async (req, res) => {
     const { name, email, password, phone_number, address, avatar, referred_by } = req.body;
 
     // [SỬA] Kiểm tra email hoặc phone_number đã tồn tại
-    const existingUser = await UserModel.findOne({
-      $or: [
-        { email: email || null },
-        { phone_number: phone_number || null },
-      ],
-    }).lean();
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email or phone number already exists.' });
+    const queryConditions = [];
+    if (email) queryConditions.push({ email });
+    if (phone_number) queryConditions.push({ phone_number });
+
+    if (queryConditions.length > 0) {
+      const existingUser = await UserModel.findOne({ $or: queryConditions }).lean();
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email or phone number already exists.' });
+      }
     }
 
     // Kiểm tra referred_by (nếu có)
@@ -82,7 +83,7 @@ exports.register = async (req, res) => {
       }
     }
 
-    // [SỬA] Tạo userData với các trường không bắt buộc được xử lý
+    // Tạo userData với các trường không bắt buộc được xử lý
     const userData = {
       name: name || undefined, // Không bắt buộc
       email: email || undefined, // Một trong email hoặc phone_number phải có (đã được validate)
@@ -110,7 +111,7 @@ exports.register = async (req, res) => {
       }
     );
 
-    // [SỬA] Ghi log đăng ký với email hoặc phone_number
+    // Ghi log đăng ký với email hoặc phone_number
     logger.info(`User registered: ${email || phone_number} (ID: ${savedUser._id})`);
 
     // Trả về cả access token và refresh token
@@ -252,6 +253,43 @@ exports.getStatusHistory = async (req, res) => {
     });
   } catch (err) {
     logger.error(`Get status history error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// [THÊM] API cập nhật hồ sơ
+exports.updateProfile = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = req.user._id; // Lấy từ authMiddleware
+    const { name, address, avatar } = req.body;
+
+    // Tìm user
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Cập nhật các trường được phép
+    if (name !== undefined) user.name = name;
+    if (address !== undefined) user.address = address;
+    if (avatar !== undefined) user.avatar = avatar;
+
+    const updatedUser = await user.save();
+
+    logger.info(`Profile updated for user: ${user.email || user.phone_number} (ID: ${user._id})`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: updatedUser.toObject(),
+    });
+  } catch (err) {
+    logger.error(`Update profile error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

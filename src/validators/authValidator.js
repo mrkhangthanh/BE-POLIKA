@@ -134,3 +134,46 @@ exports.getStatusHistoryValidation = [
       .isMongoId()
       .withMessage('Invalid user ID.'),
   ];
+// [THÊM] Validation cho update-profile
+  exports.updateProfileValidation = [
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2 })
+      .withMessage('Tên phải có ít nhất 2 ký tự.'),
+  
+    body('address.street')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Địa chỉ đường không được để trống nếu đã cung cấp.'),
+  
+    body('address.city')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Thành phố không được để trống nếu đã cung cấp.'),
+  
+    body('address.district')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Quận/Huyện không được để trống nếu đã cung cấp.'),
+  
+    body('address.ward')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Phường/Xã không được để trống nếu đã cung cấp.'),
+  
+    body('address.country')
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage('Quốc gia không được để trống nếu đã cung cấp.'),
+  
+    body('avatar')
+      .optional()
+      .isString()
+      .withMessage('Avatar phải là một chuỗi.'),
+  ];
