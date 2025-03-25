@@ -1,55 +1,67 @@
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const UserModel = require('../apps/models/user');
 
 exports.registerValidation = [
-  body('name')
-    .notEmpty()
-    .withMessage('Name is required.')
-    .isLength({ min: 2 })
-    .withMessage('Name must be at least 2 characters.'),
-  body('email')
-    .notEmpty()
-    .withMessage('Email is required.')
-    .isEmail()
-    .withMessage('Invalid email format.')
-    .custom(async (value) => {
-      const user = await UserModel.findOne({ email: value });
-      if (user) {
-        throw new Error('Email already exists.');
-      }
-      return true;
-    }),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required.')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters.'),
-  body('phone_number')
-    .notEmpty()
-    .withMessage('Phone number is required.')
-    .matches(/^[0-9]{10,11}$/)
-    .withMessage('Phone number must be 10-11 digits.')
-    .custom(async (value) => {
-      const user = await UserModel.findOne({ phone_number: value });
-      if (user) {
-        throw new Error('Phone number already exists.');
-      }
-      return true;
-    }),
-  body('address.street')
-    .notEmpty()
-    .withMessage('Street is required.'),
-  body('address.city')
-    .notEmpty()
-    .withMessage('City is required.'),
-  body('address.district')
-    .notEmpty()
-    .withMessage('District is required.'),
-  body('address.ward')
-    .notEmpty()
-    .withMessage('Ward is required.'),
-];
-
+    // [SỬA] Không yêu cầu name
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2 })
+      .withMessage('Tên phải có ít nhất 2 ký tự.'),
+  
+    // [SỬA] Validate email hoặc phone_number
+    body('email')
+      .optional()
+      .trim()
+      .isEmail()
+      .withMessage('Định dạng email không hợp lệ.')
+      .custom(async (value) => {
+        if (value) {
+          const user = await UserModel.findOne({ email: value });
+          if (user) {
+            throw new Error('Email đã tồn tại.');
+          }
+        }
+        return true;
+      }),
+  
+    body('phone_number')
+      .optional()
+      .trim()
+      .matches(/^[0-9]{10,11}$/)
+      .withMessage('Số điện thoại phải có từ 10 đến 11 chữ số.')
+      .custom(async (value) => {
+        if (value) {
+          const user = await UserModel.findOne({ phone_number: value });
+          if (user) {
+            throw new Error('Số điện thoại đã tồn tại.');
+          }
+        }
+        return true;
+      }),
+  
+    // [THÊM] Đảm bảo ít nhất một trong email hoặc phone_number được cung cấp
+    body()
+      .custom((value, { req }) => {
+        if (!req.body.email && !req.body.phone_number) {
+          throw new Error('Cần cung cấp ít nhất email hoặc số điện thoại.');
+        }
+        return true;
+      }),
+  
+    body('password')
+      .notEmpty()
+      .withMessage('Mật khẩu không được để trống.')
+      .isLength({ min: 8 })
+      .withMessage('Mật khẩu phải có ít nhất 8 ký tự.'),
+  
+    // [SỬA] Không yêu cầu address
+    body('address.street').optional(),
+    body('address.city').optional(),
+    body('address.district').optional(),
+    body('address.ward').optional(),
+    body('address.country').optional(),
+  ];
 
 exports.loginValidation = [
     body('identifier')
@@ -113,3 +125,12 @@ exports.refreshTokenValidation = [
       .notEmpty()
       .withMessage('Refresh token is required.'),
   ];    
+
+  // [THÊM] Validation cho get-status-history
+exports.getStatusHistoryValidation = [
+    query('userId')
+      .notEmpty()
+      .withMessage('User ID is required.')
+      .isMongoId()
+      .withMessage('Invalid user ID.'),
+  ];

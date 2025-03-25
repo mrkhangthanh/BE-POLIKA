@@ -3,23 +3,24 @@ const router = express.Router();
 const authController = require('../apps/Controllers/apis/authController');
 const authValidator = require('../validators/authValidator')
 const authMiddleware = require('../apps/middlewares/auth');
+const handleValidationErrors = require('../apps/middlewares/validationError')
 // const requireRole = require('../apps/middlewares/requireRole');
 const { body } = require('express-validator');
 
 // Đăng ký (khách hàng)
-router.post('/register',authValidator.registerValidation,authController.register);
+router.post('/register',authValidator.registerValidation,handleValidationErrors,authController.register);
 
 // Đăng nhập
-router.post('/login',authValidator.loginValidation, authController.login);
+router.post('/login',authValidator.loginValidation,handleValidationErrors, authController.login);
 
-router.post('/forgot-password',authValidator.forgotPasswordValidation,authController.forgotPassword);
+router.post('/forgot-password',authValidator.forgotPasswordValidation,handleValidationErrors,authController.forgotPassword);
 
 // [THÊM] Route reset mật khẩu
-router.post('/reset-password',authValidator.resetPasswordValidation,authController.resetPassword);
+router.post('/reset-password',authValidator.resetPasswordValidation,handleValidationErrors,authController.resetPassword);
 
 // [THÊM] Route làm mới access token
 router.post(
-  '/refresh-token',authValidator.refreshTokenValidation,
+  '/refresh-token',authValidator.refreshTokenValidation,handleValidationErrors,
   authController.refreshToken
 );
 
@@ -27,7 +28,15 @@ router.post(
 router.post(
   '/logout',
   authMiddleware, // Yêu cầu access token để xác thực user
-  authController.logout
+  handleValidationErrors,authController.logout
+);
+
+// [THÊM] Route xem lịch sử trạng thái
+router.get(
+  '/status-history',
+  authMiddleware,
+  authValidator.getStatusHistoryValidation,handleValidationErrors,
+  authController.getStatusHistory
 );
 
 module.exports = router;

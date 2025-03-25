@@ -4,9 +4,9 @@ const agentController = require('../apps/Controllers/apis/agentController');
 const authMiddleware = require('../apps/middlewares/auth');
 const requireRole = require('../apps/middlewares/requireRole');
 const { body, validationResult } = require('express-validator');
-
+const handleValidationErrors = require('../apps/middlewares/validationError');
 // API cho đại lý
-router.get('/agent/customers', authMiddleware, requireRole(['agent'], { readOnly: true }), agentController.getCustomersByAgent);
-router.get('/agent/orders', authMiddleware, requireRole(['agent'], { readOnly: true }), agentController.getOrdersByAgentCustomers);
+router.get('/agent/customers', authMiddleware, requireRole(['agent'], { readOnly: true }),handleValidationErrors, agentController.getCustomersByAgent);
+router.get('/agent/orders', authMiddleware, requireRole(['agent'], { readOnly: true }),handleValidationErrors, agentController.getOrdersByAgentCustomers);
 
 module.exports = router;

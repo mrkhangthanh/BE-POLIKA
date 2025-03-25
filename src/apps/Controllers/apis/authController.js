@@ -63,7 +63,13 @@ exports.register = async (req, res) => {
 
     const { name, email, password, phone_number, address, avatar, referred_by } = req.body;
 
-    const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
+    // [SỬA] Kiểm tra email hoặc phone_number đã tồn tại
+    const existingUser = await UserModel.findOne({
+      $or: [
+        { email: email || null },
+        { phone_number: phone_number || null },
+      ],
+    }).lean();
     if (existingUser) {
       return res.status(400).json({ error: 'Email or phone number already exists.' });
     }
@@ -76,13 +82,14 @@ exports.register = async (req, res) => {
       }
     }
 
+    // [SỬA] Tạo userData với các trường không bắt buộc được xử lý
     const userData = {
-      name,
-      email,
+      name: name || undefined, // Không bắt buộc
+      email: email || undefined, // Một trong email hoặc phone_number phải có (đã được validate)
       password,
-      phone_number,
+      phone_number: phone_number || undefined,
       role: 'customer',
-      address,
+      address: address || {}, // Không bắt buộc, để trống nếu không có
       avatar: avatar || null,
       referred_by: referred_by || null,
     };
@@ -94,7 +101,7 @@ exports.register = async (req, res) => {
     const accessToken = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const refreshToken = jwt.sign({ id: savedUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // [THÊM] Lưu refresh token vào database
+    // Lưu refresh token vào database
     await UserModel.updateOne(
       { _id: savedUser._id },
       {
@@ -103,11 +110,10 @@ exports.register = async (req, res) => {
       }
     );
 
+    // [SỬA] Ghi log đăng ký với email hoặc phone_number
+    logger.info(`User registered: ${email || phone_number} (ID: ${savedUser._id})`);
 
- // [THÊM] Ghi log đăng ký
-    logger.info(`User registered: ${email} (ID: ${savedUser._id})`);
-
-    // [SỬA] Trả về cả access token và refresh token
+    // Trả về cả access token và refresh token
     res.status(201).json({ success: true, accessToken, refreshToken, user: savedUser.toObject() });
   } catch (err) {
     logger.error(`Register error: ${err.message}`);
@@ -223,6 +229,29 @@ exports.logout = async (req, res) => {
     res.status(200).json({ success: true, message: 'Logged out successfully.' });
   } catch (err) {
     logger.error(`Logout error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+// [THÊM] API xem lịch sử trạng thái
+exports.getStatusHistory = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    // Tìm user và chỉ lấy trường status_history
+    const user = await UserModel.findById(userId, 'status status_history');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    logger.info(`Status history viewed for user: ${userId} by admin (ID: ${req.user._id})`);
+
+    res.status(200).json({
+      success: true,
+      currentStatus: user.status,
+      statusHistory: user.status_history,
+    });
+  } catch (err) {
+    logger.error(`Get status history error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

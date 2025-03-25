@@ -1,14 +1,15 @@
 const { body } = require('express-validator');
 
 exports.createPostValidation = [
-  body('title')
-    .notEmpty()
-    .withMessage('Title is required.')
-    .isLength({ max: 200 })
-    .withMessage('Title cannot exceed 200 characters.'),
-  body('content')
-    .notEmpty()
-    .withMessage('Content is required.')
-    .isLength({ max: 5000 })
-    .withMessage('Content cannot exceed 5000 characters.'),
-];
+    body('title')
+      .notEmpty()
+      .withMessage('Tiêu đề không được để trống.')
+      .isLength({ max: 200 })
+      .withMessage('Tiêu đề không được vượt quá 200 ký tự.'),
+  
+    body('content')
+      .notEmpty()
+      .withMessage('Nội dung không được để trống.')
+      .isLength({ max: 5000 })
+      .withMessage('Nội dung không được vượt quá 5000 ký tự.'),
+  ];
