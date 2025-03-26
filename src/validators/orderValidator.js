@@ -1,4 +1,4 @@
-const { body, query } = require('express-validator');
+const { body, query, param } = require('express-validator');
 const UserModel = require('../apps/models/user');
 
 exports.createOrderValidation = [
@@ -89,3 +89,29 @@ exports.getCustomerOrdersValidation = [
       .withMessage('Trạng thái phải là một trong: pending, accepted, in_progress, completed, cancelled'),
   ];
   
+exports.cancelOrderValidation = [
+    param('id')
+      .isMongoId()
+      .withMessage('ID đơn hàng không hợp lệ.'),
+  ];
+
+  // [THÊM] Validation cho hoàn tất đơn hàng
+exports.completeOrderValidation = [
+    param('id')
+      .isMongoId()
+      .withMessage('ID đơn hàng không hợp lệ.'),
+  ];
+
+  // [THÊM] Validation cho acceptOrder
+exports.acceptOrderValidation = [
+    param('id')
+      .isMongoId()
+      .withMessage('Invalid order ID.'),
+  ];
+  
+  // [THÊM] Validation cho rejectOrder
+  exports.rejectOrderValidation = [
+    param('id')
+      .isMongoId()
+      .withMessage('Invalid order ID.'),
+  ];

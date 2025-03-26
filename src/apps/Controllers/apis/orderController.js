@@ -264,3 +264,109 @@ exports.getCustomerOrders = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+// [THÊM] API hủy đơn hàng khi khách hàng không muốn tiếp tục dang ở trạng thái pending
+exports.cancelOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const user = req.user;
+
+    // Kiểm tra user có phải là customer không
+    if (user.role !== 'customer') {
+      return res.status(403).json({ error: 'Access denied. Only customers can cancel orders.' });
+    }
+
+    // Tìm đơn hàng
+    const order = await OrderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    // Kiểm tra xem user có phải là người tạo đơn hàng không
+    if (order.customer_id.toString() !== user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied. You can only cancel your own orders.' });
+    }
+
+    // Kiểm tra trạng thái đơn hàng
+    if (order.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending orders can be cancelled.' });
+    }
+
+    // Cập nhật trạng thái đơn hàng thành 'cancelled'
+    order.status = 'cancelled';
+    await order.save();
+
+    logger.info(`Order ${orderId} cancelled by user: ${user.email || user.phone_number} (ID: ${user._id})`);
+
+    res.status(200).json({ success: true, message: 'Order cancelled successfully.' });
+  } catch (err) {
+    logger.error(`Cancel order error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// [THÊM] API hoàn thành đơn hàng
+exports.completeOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const user = req.user;
+
+    // Kiểm tra user có phải là technician không
+    if (user.role !== 'technician') {
+      return res.status(403).json({ error: 'Access denied. Only technicians can complete orders.' });
+    }
+
+    // Tìm đơn hàng
+    const order = await OrderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    // Kiểm tra xem user có phải là technician được gán cho đơn hàng không
+    if (!order.technician_id || order.technician_id.toString() !== user._id.toString()) {
+      return res.status(403).json({ error: 'Access denied. You are not assigned to this order.' });
+    }
+
+    // Kiểm tra trạng thái đơn hàng
+    if (order.status !== 'accepted') {
+      return res.status(400).json({ error: 'Only accepted orders can be completed.' });
+    }
+
+    // Cập nhật trạng thái đơn hàng thành 'completed'
+    order.status = 'completed';
+    await order.save();
+
+    logger.info(`Order ${orderId} completed by technician: ${user.email || user.phone_number} (ID: ${user._id})`);
+
+    res.status(200).json({ success: true, message: 'Order completed successfully.' });
+  } catch (err) {
+    logger.error(`Complete order error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// Trong xem chi tiết một đơn hàng cụ thể
+exports.getOrderById = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const user = req.user;
+
+    const order = await OrderModel.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    // Kiểm tra quyền truy cập
+    if (
+      order.customer_id.toString() !== user._id.toString() &&
+      order.technician_id?.toString() !== user._id.toString()
+    ) {
+      return res.status(403).json({ error: 'Access denied. You can only view your own orders.' });
+    }
+
+    res.status(200).json({ success: true, order });
+  } catch (err) {
+    logger.error(`Get order by ID error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};

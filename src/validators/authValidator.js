@@ -111,12 +111,11 @@ exports.forgotPasswordValidation = [
   exports.resetPasswordValidation = [
     body('token')
       .notEmpty()
-      .withMessage('Reset token is required.'),
+      .withMessage('Mã đặt lại mật khẩu là bắt buộc.'),
+  
     body('newPassword')
-      .notEmpty()
-      .withMessage('New password is required.')
       .isLength({ min: 8 })
-      .withMessage('New password must be at least 8 characters.'),
+      .withMessage('Mật khẩu mới phải có ít nhất 8 ký tự.'),
   ];
 
   //  Validation cho refresh token
