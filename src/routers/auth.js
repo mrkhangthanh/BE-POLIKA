@@ -47,5 +47,7 @@ router.patch(
   handleValidationErrors,
   authController.updateProfile
 );
+// [THÊM] Route đăng xuất
+router.post('/logout', authMiddleware, authController.logout);
 
 module.exports = router;

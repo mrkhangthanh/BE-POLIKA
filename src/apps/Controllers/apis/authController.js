@@ -1,5 +1,6 @@
 const UserModel = require('../../models/user');
 const logger = require('../../../libs/logger');
+const {addToBlacklist} = require('../../../common/init.redis');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
@@ -174,11 +175,57 @@ exports.resetPassword = async (req, res) => {
     user.password = newPassword;
     user.reset_password_token = null;
     user.reset_password_expires = null;
+
+    // [THÊM] Đánh dấu tất cả token cũ là dirty và xóa các phiên đăng nhập
+    const userId = user._id.toString();
+    const sessions = await redisClient.lRange(`sessions:${userId}`, 0, -1);
+
+    // Thêm tất cả token vào blacklist
+    const currentTime = Math.floor(Date.now() / 1000);
+    for (const session of sessions) {
+      const { accessToken, refreshToken } = JSON.parse(session);
+
+      // Thêm access token vào blacklist
+      if (accessToken) {
+        try {
+          const decodedAccess = jwt.verify(accessToken, process.env.JWT_SECRET);
+          const expiresIn = decodedAccess.exp - currentTime;
+          if (expiresIn > 0) {
+            await addToBlacklist(accessToken, expiresIn);
+          }
+        } catch (err) {
+          logger.warn(`Invalid access token in session for user ${userId}: ${err.message}`);
+        }
+      }
+
+      // Thêm refresh token vào blacklist
+      if (refreshToken) {
+        try {
+          const decodedRefresh = jwt.verify(refreshToken, process.env.JWT_SECRET);
+          const refreshExpiresIn = decodedRefresh.exp - currentTime;
+          if (refreshExpiresIn > 0) {
+            await addToBlacklist(refreshToken, refreshExpiresIn);
+          }
+        } catch (err) {
+          logger.warn(`Invalid refresh token in session for user ${userId}: ${err.message}`);
+        }
+      }
+    }
+
+    // Xóa tất cả phiên đăng nhập trong Redis
+    await redisClient.del(`sessions:${userId}`);
+
+    // Xóa refresh token trong UserModel (nếu có)
+    if (user.refreshToken) {
+      user.refreshToken = null;
+    }
+
+    // Lưu user
     await user.save();
 
     logger.info(`Password reset successful for user: ${user.email} (ID: ${user._id})`);
 
-    res.status(200).json({ success: true, message: 'Password has been reset successfully.' });
+    res.status(200).json({ success: true, message: 'Password has been reset successfully. Please log in again.' });
   } catch (err) {
     logger.error(`Reset password error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
@@ -213,21 +260,38 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// [THÊM] Đăng xuất
+// [THÊM hoặc CẬP NHẬT] API đăng xuất
 exports.logout = async (req, res) => {
   try {
-    // Lấy user từ middleware auth (giả sử bạn đã có middleware kiểm tra access token)
-    const userId = req.user.id; // req.user được gán bởi middleware auth
+    const token = req.token; // Lấy token từ req (đã được gán trong authMiddleware)
+    if (!token) {
+      return res.status(401).json({ error: 'Access denied. No token provided.' });
+    }
 
-    // Xóa refresh token
-    await UserModel.updateOne(
-      { _id: userId },
-      { refresh_token: null, refresh_token_expires: null }
-    );
+    // Xác minh token để lấy thời gian hết hạn
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    logger.info(`User logged out: (ID: ${userId})`);
+    // Tính thời gian còn lại của token (để set TTL trong Redis)
+    const currentTime = Math.floor(Date.now() / 1000);
+    const expiresIn = decoded.exp - currentTime;
 
-    res.status(200).json({ success: true, message: 'Logged out successfully.' });
+    // Thêm access token vào blacklist
+    await addToBlacklist(token, expiresIn);
+
+    // [TÙY CHỌN] Nếu bạn lưu refresh token trong database, có thể xóa hoặc đánh dấu nó là không hợp lệ
+    const user = await UserModel.findById(decoded.id);
+    if (user.refreshToken) {
+      const refreshToken = user.refreshToken;
+      const refreshDecoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+      const refreshExpiresIn = refreshDecoded.exp - currentTime;
+      await addToBlacklist(refreshToken, refreshExpiresIn);
+      user.refreshToken = null;
+      await user.save();
+    }
+
+    logger.info(`User ${user.email || user.phone_number} (ID: ${user._id}) logged out.`);
+
+    res.status(200).json({ success: true, message: 'Logged out successfully' });
   } catch (err) {
     logger.error(`Logout error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
