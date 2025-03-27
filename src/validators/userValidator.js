@@ -1,4 +1,4 @@
-const { body } = require('express-validator');
+const { body,param } = require('express-validator');
 const UserModel = require('../apps/models/user');
 
 exports.createUserValidation = [
@@ -61,4 +61,30 @@ exports.createUserValidation = [
   body('address.ward')
     .notEmpty()
     .withMessage('Phường/xã không được để trống.'),
+];
+exports.updateUserValidation = [
+  param('id').isMongoId().withMessage('ID người dùng không hợp lệ.'),
+
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('Vui lòng cung cấp một địa chỉ email hợp lệ.'),
+
+  body('phone_number')
+    .optional()
+    .isString()
+    .withMessage('Số điện thoại phải là một chuỗi ký tự.'),
+
+  body('role')
+    .optional()
+    .isIn(['customer', 'technician', 'admin'])
+    .withMessage('Vai trò không hợp lệ.'),
+
+  body('status')
+    .optional()
+    .isIn(['active', 'inactive'])
+    .withMessage('Trạng thái không hợp lệ.'),
+];
+exports.deleteUserValidation = [
+  param('id').isMongoId().withMessage('Invalid user ID.'),
 ];

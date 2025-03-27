@@ -22,13 +22,18 @@ const postSchema = new mongoose.Schema({
   },
   tags: {
     type: [String],
-    default: [] // Ví dụ: ['news', 'tutorial', 'repair']
+    default: []
   },
   views: {
     type: Number,
-    default: 0, // Đếm số lượt xem bài viết
+    default: 0,
     min: [0, 'Views cannot be negative']
   },
+  likes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users',
+    default: []
+  }],
   created_at: {
     type: Date,
     default: Date.now
