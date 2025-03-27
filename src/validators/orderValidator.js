@@ -43,7 +43,7 @@ exports.createOrderValidation = [
       .notEmpty()
       .withMessage('Quốc gia không được để trống nếu đã cung cấp.'),
   
-    // [THÊM] Validation cho phone_number
+    // Validation cho phone_number
     body('phone_number')
       .optional()
       .trim()
@@ -58,10 +58,16 @@ exports.createOrderValidation = [
         }
         return true;
       }),
-  ];
 
+    // Thêm validation cho total_amount
+    body('total_amount')
+      .notEmpty()
+      .withMessage('Giá trị đơn hàng không được để trống.')
+      .isFloat({ min: 0 })
+      .withMessage('Giá trị đơn hàng phải là số không âm.'),
+];
 
-// [THÊM] Validation cho getCustomerOrders
+// Validation cho getCustomerOrders
 exports.getCustomerOrdersValidation = [
     query('page')
       .optional()
@@ -87,31 +93,31 @@ exports.getCustomerOrdersValidation = [
       .optional()
       .isIn(['pending', 'accepted', 'in_progress', 'completed', 'cancelled'])
       .withMessage('Trạng thái phải là một trong: pending, accepted, in_progress, completed, cancelled'),
-  ];
+];
   
 exports.cancelOrderValidation = [
     param('id')
       .isMongoId()
       .withMessage('ID đơn hàng không hợp lệ.'),
-  ];
+];
 
-  // [THÊM] Validation cho hoàn tất đơn hàng
+// Validation cho hoàn tất đơn hàng
 exports.completeOrderValidation = [
     param('id')
       .isMongoId()
       .withMessage('ID đơn hàng không hợp lệ.'),
-  ];
+];
 
-  // [THÊM] Validation cho acceptOrder
+// Validation cho acceptOrder
 exports.acceptOrderValidation = [
     param('id')
       .isMongoId()
       .withMessage('Invalid order ID.'),
-  ];
-  
-  // [THÊM] Validation cho rejectOrder
-  exports.rejectOrderValidation = [
+];
+
+// Validation cho rejectOrder
+exports.rejectOrderValidation = [
     param('id')
       .isMongoId()
       .withMessage('Invalid order ID.'),
-  ];
+];

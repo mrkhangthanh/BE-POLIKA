@@ -23,6 +23,7 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  total_amount: { type: Number, required: true, min: 0 }, // Thêm trường total_amount
   address: {
     street: { type: String, required: true },
     city: { type: String, required: true },
