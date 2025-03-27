@@ -24,13 +24,15 @@ const orderSchema = new mongoose.Schema({
     required: true,
   },
   total_amount: { type: Number, required: true, min: 0 }, // Thêm trường total_amount
-  address: {
-    street: { type: String, required: true },
-    city: { type: String, required: true },
-    district: { type: String, required: true },
-    ward: { type: String, required: true },
+  address: { // Thêm trường address
+    street: { type: String, required: false },
+    city: { type: String, required: false },
+    district: { type: String, required: false },
+    ward: { type: String, required: false },
     country: { type: String, default: 'Vietnam' },
   },
+  phone_number: { type: String, required: false }, // Thêm trường phone_number
+  
   status: {
     type: String,
     enum: ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'],
