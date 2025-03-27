@@ -192,26 +192,3 @@ exports.likePostValidation = [
   param('id').isMongoId().withMessage('ID bài viết không hợp lệ.'),
 ];
 
-// Validation cho createComment
-exports.createCommentValidation = [
-  param('postId').isMongoId().withMessage('ID bài viết không hợp lệ.'),
-  body('content').notEmpty().withMessage('Nội dung bình luận là bắt buộc.'),
-];
-
-// Validation cho getComments
-exports.getCommentsValidation = [
-  param('postId').isMongoId().withMessage('ID bài viết không hợp lệ.'),
-  query('page')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('Trang phải là số nguyên dương.'),
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('Giới hạn phải từ 1 đến 100.'),
-];
-
-// Validation cho deleteComment
-exports.deleteCommentValidation = [
-  param('commentId').isMongoId().withMessage('ID bình luận không hợp lệ.'),
-];
