@@ -159,3 +159,49 @@ exports.getOrdersByAgentCustomers = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+// Thêm hàm getCommission hoa hồng
+exports.getCommission = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Lấy danh sách khách hàng thuộc đại lý
+    const customers = await UserModel.find({ agent_id: req.user._id, role: 'customer' }).select('_id');
+    const customerIds = customers.map(customer => customer._id);
+
+    // Tạo query để lấy đơn hàng
+    const query = {
+      customer_id: { $in: customerIds },
+      status: 'completed', // Chỉ tính doanh thu từ đơn hàng đã hoàn thành
+    };
+
+    if (startDate || endDate) {
+      query.created_at = {};
+      if (startDate) query.created_at.$gte = new Date(startDate);
+      if (endDate) query.created_at.$lte = new Date(endDate);
+    }
+
+    // Tính tổng doanh thu
+    const orders = await OrderModel.find(query).lean();
+    const totalRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+
+    // Lấy tỷ lệ hoa hồng của đại lý
+    const agent = await UserModel.findById(req.user._id).select('commission');
+    const commissionRate = agent.commission || 0;
+
+    // Tính hoa hồng
+    const commission = totalRevenue * commissionRate;
+
+    // Trả về kết quả
+    res.status(200).json({
+      success: true,
+      totalRevenue,
+      commissionRate,
+      commission,
+      totalOrders: orders.length,
+    });
+  } catch (err) {
+    logger.error(`Get commission error: ${err.message}`);
+    res.status(500).json({ error: 'Lỗi máy chủ nội bộ', details: err.message });
+  }
+};

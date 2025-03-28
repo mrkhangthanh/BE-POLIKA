@@ -16,7 +16,7 @@ exports.createOrder = async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Only customers can create orders.' });
     }
 
-    const { service_type, description, address, phone_number } = req.body;
+    const { service_type, description, address, phone_number, price } = req.body;
 
     const validServiceTypes = ['plumbing', 'electrical', 'carpentry', 'hvac'];
     if (!validServiceTypes.includes(service_type)) {
@@ -29,7 +29,7 @@ exports.createOrder = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    // [THÊM] Kiểm tra phone_number của user
+    // Kiểm tra phone_number của user
     let orderPhoneNumber = user.phone_number;
     if (!orderPhoneNumber) {
       // Nếu user chưa có phone_number, yêu cầu phone_number trong request
@@ -66,8 +66,9 @@ exports.createOrder = async (req, res) => {
       customer_id: req.user._id,
       service_type,
       description,
+      price, // Lưu price từ request
       address: orderAddress,
-      price: 0,
+      phone_number: orderPhoneNumber,
     };
 
     const order = new OrderModel(orderData);

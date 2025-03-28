@@ -59,12 +59,13 @@ exports.createOrderValidation = [
         return true;
       }),
 
-    // Thêm validation cho total_amount
-    body('total_amount')
-      .notEmpty()
-      .withMessage('Giá trị đơn hàng không được để trống.')
-      .isFloat({ min: 0 })
-      .withMessage('Giá trị đơn hàng phải là số không âm.'),
+  
+   // Thêm validation cho price
+   body('price')
+   .notEmpty()
+   .withMessage('Giá trị đơn hàng không được để trống.')
+   .isFloat({ min: 0 })
+   .withMessage('Giá trị đơn hàng phải là số không âm.'),
 ];
 
 // Validation cho getCustomerOrders
@@ -121,3 +122,25 @@ exports.rejectOrderValidation = [
       .isMongoId()
       .withMessage('Invalid order ID.'),
 ];
+
+// Thêm validation cho getCommission
+exports.getCommissionValidation = [
+    query('startDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Ngày bắt đầu phải là một ngày hợp lệ theo định dạng ISO 8601.'),
+    query('endDate')
+      .optional()
+      .isISO8601()
+      .withMessage('Ngày kết thúc phải là một ngày hợp lệ theo định dạng ISO 8601.'),
+    query('startDate')
+      .if(query('endDate').exists())
+      .custom((startDate, { req }) => {
+        const start = new Date(startDate);
+        const end = new Date(req.query.endDate);
+        if (start > end) {
+          throw new Error('Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.');
+        }
+        return true;
+      }),
+  ];
