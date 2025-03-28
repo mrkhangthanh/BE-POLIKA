@@ -1,75 +1,81 @@
 const express = require('express');
 const router = express.Router();
-const orderController = require('../controllers/orderController');
-const orderValidator = require('../validators/orderValidator');
+const customerController = require('../controllers/customerController');
+const technicianController = require('../controllers/technicianController');
+const customerValidator = require('../validators/customerValidator');
+const technicianValidator = require('../validators/technicianValidator');
 const authMiddleware = require('../../middlewares/auth');
+const handleValidationErrors = require('../../middlewares/validationError');
 const requireRole = require('../../middlewares/requireRole');
-const handleValidationErrors = require('../../middlewares/validationError')
-const { body, validationResult } = require('express-validator');
 
-// Quản lý đơn hàng
-// router.post('/orders',authMiddleware,orderValidator.createOrderValidation,orderController.createOrder);
-  router.get('/technician/orders', authMiddleware,requireRole(['technician']), orderController.getOrdersForTechnician);
-  router.post(
-    '/technician/orders/:id/accept',
-    authMiddleware,
-    requireRole(['technician']), // [THÊM] Chỉ technician được chấp nhận
-    orderValidator.acceptOrderValidation, // [THÊM] Validation
-    handleValidationErrors, // [THÊM] Xử lý lỗi validation
-    orderController.acceptOrder
-  );
-  // Route technician từ chối đơn hàng (chỉ technician)
+// Routes cho khách hàng
 router.post(
-  '/technician/orders/:id/reject',
+  '/orders',
   authMiddleware,
-  requireRole(['technician']), // [THÊM] Chỉ technician được từ chối
-  orderValidator.rejectOrderValidation, // [THÊM] Validation
-  handleValidationErrors, // [THÊM] Xử lý lỗi validation
-  orderController.rejectOrder
+  requireRole(['customer']),
+  customerValidator.createOrderValidation,
+  handleValidationErrors,
+  customerController.createOrder
 );
 
-  router.post(
-    '/create-order',
-    authMiddleware,
-    orderValidator.createOrderValidation,
-    requireRole(['customer']),
-    handleValidationErrors,
-    orderController.createOrder
-  );
-
-// [THÊM] Route xem danh sách đơn hàng của khách hàng
 router.get(
-  '/customer/orders',
+  '/orders/customer',
   authMiddleware,
-  orderValidator.getCustomerOrdersValidation,
+  requireRole(['customer']),
+  customerValidator.getCustomerOrdersValidation,
   handleValidationErrors,
-  orderController.getCustomerOrders
+  customerController.getCustomerOrders
 );
 
-// [THÊM] Route hủy đơn hàng chỉ cho khách hàng
-router.post(
-  '/customer/orders/:id/cancel',
+router.put(
+  '/orders/:id/cancel',
   authMiddleware,
-  orderValidator.cancelOrderValidation,
-  handleValidationErrors,
-  orderController.cancelOrder
+  requireRole(['customer']),
+  customerController.cancelOrder
 );
 
-// [THÊM] Route hoàn thành đơn hàng chỉ technician mới có thể sử dụng
-router.post(
-  '/technician/orders/:id/complete',
+// Routes cho thợ sửa chữa
+router.get(
+  '/orders/technician',
   authMiddleware,
-  orderValidator.completeOrderValidation,
+  requireRole(['technician']),
+  technicianValidator.getOrdersForTechnicianValidation,
   handleValidationErrors,
-  orderController.completeOrder
+  technicianController.getOrdersForTechnician
 );
 
+router.put(
+  '/orders/:id/accept',
+  authMiddleware,
+  requireRole(['technician']),
+  technicianValidator.acceptOrderValidation,
+  handleValidationErrors,
+  technicianController.acceptOrder
+);
+
+router.put(
+  '/orders/:id/reject',
+  authMiddleware,
+  requireRole(['technician']),
+  technicianValidator.rejectOrderValidation,
+  handleValidationErrors,
+  technicianController.rejectOrder
+);
+
+router.put(
+  '/orders/:id/complete',
+  authMiddleware,
+  requireRole(['technician']),
+  technicianValidator.completeOrderValidation,
+  handleValidationErrors,
+  technicianController.completeOrder
+);
+
+// Route xem chi tiết đơn hàng (dùng chung cho cả khách hàng và thợ sửa chữa)
 router.get(
   '/orders/:id',
   authMiddleware,
-   // Thêm validation nếu cần
-  handleValidationErrors,
-  orderController.getOrderById
+  customerController.getOrderById
 );
 
-  module.exports = router;
+module.exports = router;
