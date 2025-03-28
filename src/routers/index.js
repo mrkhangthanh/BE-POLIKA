@@ -3,12 +3,12 @@ const express = require('express');
 const router = express.Router();
 
 // Import các route
-const authRoutes = require('./auth');
-const userRoutes = require('./user');
-const orderRoutes = require('./order');
-const postRoutes = require('./post');
-const messageRoutes = require('./message');
-const agentRoutes = require('./agent');
+const authRoutes = require('../apps/auth/routers/auth');
+const userRoutes = require('../apps/user/routers/user');
+const orderRoutes = require('../apps/order/routers/order');
+const postRoutes = require('../apps/post/routers/post');
+const messageRoutes = require('../apps/message/routers/message');
+const agentRoutes = require('../apps/agent/routers/agent');
 
 // Định nghĩa các route
 router.use(authRoutes);
