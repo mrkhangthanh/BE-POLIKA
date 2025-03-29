@@ -17,7 +17,7 @@ const io = new Server(server);
 //     allowedHeaders: ['Content-Type', 'Authorization'], // Các header được phép
 //   }));
 
-app.use(cors());
+// app.use(cors()); 
   // Cấu hình Socket.IO
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);

@@ -12,7 +12,7 @@ const requireRole = require('../../middlewares/requireRole');
 router.post(
   '/orders',
   authMiddleware,
-  requireRole(['customer']),
+  // requireRole(['customer']),
   customerValidator.createOrderValidation,
   handleValidationErrors,
   customerController.createOrder
