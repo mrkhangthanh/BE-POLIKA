@@ -9,9 +9,6 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    if (req.user.role !== 'customer') {
-      return res.status(403).json({ error: 'Access denied. Only customers can create orders.' });
-    }
 
     const order = await OrderService.createOrder(req.user._id, req.body);
     res.status(201).json({ success: true, order });
@@ -25,10 +22,6 @@ exports.getCustomerOrders = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
-    }
-
-    if (req.user.role !== 'customer') {
-      return res.status(403).json({ error: 'Access denied. Only customers can view their orders.' });
     }
 
     const { page = 1, limit = 10 } = req.query;
@@ -55,9 +48,6 @@ exports.getCustomerOrders = async (req, res) => {
 
 exports.cancelOrder = async (req, res) => {
   try {
-    if (req.user.role !== 'customer') {
-      return res.status(403).json({ error: 'Access denied. Only customers can cancel orders.' });
-    }
 
     const result = await OrderService.cancelOrder(req.user._id, req.params.id);
     res.status(200).json({ success: true, ...result });

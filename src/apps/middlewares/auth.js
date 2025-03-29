@@ -9,7 +9,7 @@ const authMiddleware = async (req, res, next) => {
     if (!token) {
       return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
-
+    console.log('Auth Header:', token); // Thêm log
     // [THÊM] Kiểm tra token trong blacklist
     const blacklisted = await isBlacklisted(token);
     if (blacklisted) {
@@ -18,11 +18,11 @@ const authMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await UserModel.findById(decoded.id).lean();
-
+    console.log('Decoded Token:', decoded); // Thêm log
     if (!user) {
       return res.status(401).json({ error: 'Invalid token.' });
     }
-
+    console.log('User:', user); // Thêm log
     if (user.status !== 'active') {
       return res.status(403).json({ error: 'Access denied. Your account is inactive.' });
     }

@@ -1,5 +1,7 @@
 const requireRole = (roles, options = { readOnly: false }) => {
   return (req, res, next) => {
+    console.log('User Role:', req.user.role); // Thêm log
+    console.log('Required Roles:', roles); // Thêm log
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
