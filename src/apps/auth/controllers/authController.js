@@ -1,7 +1,7 @@
 const UserModel = require('../models/user');
 const logger = require('../../../libs/logger');
 const {addToBlacklist} = require('../../../common/init.redis');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 

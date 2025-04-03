@@ -1,5 +1,5 @@
 const mongoose = require('../../../common/init.myDB')();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: false, trim: true },
@@ -40,7 +40,11 @@ const userSchema = new mongoose.Schema({
     enum: ['plumbing', 'electrical', 'carpentry', 'hvac']
   },
   avatar: { type: String, default: null },
-  referred_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Users', default: null },
+  referred_by: { 
+  // type: mongoose.Schema.Types.ObjectId, ref: 'Users', default: null
+  type: String,
+   default: null
+   },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   commission: {
     type: Number,

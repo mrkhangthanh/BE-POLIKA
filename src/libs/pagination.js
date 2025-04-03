@@ -6,7 +6,7 @@
  * @param {Object} [query={}] - Điều kiện lọc
  * @returns {Object} - Thông tin phân trang
  */
-module.exports = async (page = 1, limit = 10, Model, query = {}) => {
+module.exports = async (page = 1, limit = 15, Model, query = {}) => {
     try {
       // Chuẩn hóa tham số
       page = parseInt(page) || 1;

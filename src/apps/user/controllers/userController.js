@@ -1,6 +1,7 @@
 const UserModel = require('../../auth/models/user');
 const { body, validationResult } = require('express-validator');
 const pagination = require('../../../libs/pagination');
+const bcrypt = require('bcryptjs');
 
 // Tạo user (cho admin)
 exports.createUser = async (req, res) => {
@@ -12,15 +13,18 @@ exports.createUser = async (req, res) => {
 
     const { name, email, password, phone_number, role, address, specialization, referred_by, avatar } = req.body;
 
+    // Kiểm tra email hoặc số điện thoại đã tồn tại
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
     if (existingUser) {
       return res.status(400).json({ error: 'Email or phone number already exists.' });
     }
 
-    if ((role === 'customer' || role === 'technician') && (!address || !address.street || !address.city || !address.district || !address.ward)) {
-      return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer and technician roles.' });
-    }
+    // 🔴 [XÓA] Bỏ kiểm tra bắt buộc address
+    // if ((role === 'customer' || role === 'technician') && (!address || !address.street || !address.city || !address.district || !address.ward)) {
+    //   return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer and technician roles.' });
+    // }
 
+    // Kiểm tra specialization nếu role là technician
     if (role === 'technician') {
       if (!specialization || !Array.isArray(specialization) || specialization.length === 0) {
         return res.status(400).json({ error: 'Specialization is required for technician role.' });
@@ -31,23 +35,29 @@ exports.createUser = async (req, res) => {
       }
     }
 
-    const userData = {
+    // Mã hóa mật khẩu
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Tạo user mới
+    const newUser = new UserModel({
       name,
       email,
-      password,
+      password: hashedPassword,
       phone_number,
       role,
-      address: role === 'customer' || role === 'technician' ? address : undefined,
+      address, // address có thể là null
       specialization: role === 'technician' ? specialization : undefined,
       referred_by,
-      avatar: avatar || null,
-    };
+      avatar,
+      status: 'active',
+    });
 
-    const user = new UserModel(userData);
-    const savedUser = await user.save();
+    await newUser.save();
 
-    res.status(201).json({ success: true, user: savedUser });
+    res.status(201).json({ success: true, user: newUser });
   } catch (err) {
+    console.error('Error:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

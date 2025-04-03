@@ -46,21 +46,26 @@ exports.createUserValidation = [
     .isIn(['admin', 'manager', 'content_writer', 'technician', 'customer', 'agent'])
     .withMessage('Vai trò không hợp lệ.'),
 
-  body('address.street')
-    .notEmpty()
-    .withMessage('Địa chỉ đường không được để trống.'),
+//   // 🔴 [SỬA] Chỉ yêu cầu address nếu role là customer hoặc technician
+//   body('address.street')
+//     .if(body('role').isIn(['customer', 'technician']))
+//     .notEmpty()
+//     .withMessage('Địa chỉ đường không được để trống cho customer hoặc technician.'),
 
-  body('address.city')
-    .notEmpty()
-    .withMessage('Thành phố không được để trống.'),
+//   body('address.city')
+//     .if(body('role').isIn(['customer', 'technician']))
+//     .notEmpty()
+//     .withMessage('Thành phố không được để trống cho customer hoặc technician.'),
 
-  body('address.district')
-    .notEmpty()
-    .withMessage('Quận/huyện không được để trống.'),
+//   body('address.district')
+//     .if(body('role').isIn(['customer', 'technician']))
+//     .notEmpty()
+//     .withMessage('Quận/huyện không được để trống cho customer hoặc technician.'),
 
-  body('address.ward')
-    .notEmpty()
-    .withMessage('Phường/xã không được để trống.'),
+//   body('address.ward')
+//     .if(body('role').isIn(['customer', 'technician']))
+//     .notEmpty()
+//     .withMessage('Phường/xã không được để trống cho customer hoặc technician.'),
 ];
 exports.updateUserValidation = [
   param('id').isMongoId().withMessage('ID người dùng không hợp lệ.'),

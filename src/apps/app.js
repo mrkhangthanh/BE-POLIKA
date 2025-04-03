@@ -11,17 +11,18 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // khôi phục cors trong môi trường product. sau...
-// app.use(cors({
-//     origin: 'http://localhost:3000', // Chỉ cho phép origin từ localhost:3000
-//     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE','OPTIONS'], // Các phương thức được phép
-//     allowedHeaders: ['Content-Type', 'Authorization'], // Các header được phép
-//   }));
+app.use(cors({
+    origin: 'http://localhost:3000', // Chỉ cho phép origin từ localhost:3000
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE','OPTIONS'], // Các phương thức được phép
+    allowedHeaders: ['Content-Type', 'Authorization'], // Các header được phép
+  }));
 
-// app.use(cors()); 
+app.use(cors()); 
   // Cấu hình Socket.IO
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
+  
   socket.on('join', (userId) => {
     socket.join(userId);
   });
