@@ -10,7 +10,7 @@ const requireRole = require('../../middlewares/requireRole');
 
 // Routes cho khách hàng
 router.post(
-  '/orders',
+  '/create-order',
   authMiddleware,
   // requireRole(['customer']),
   customerValidator.createOrderValidation,
@@ -19,9 +19,9 @@ router.post(
 );
 
 router.get(
-  '/orders/customer',
+  '/customer/orders',
   authMiddleware,
-  requireRole(['customer']),
+  requireRole(['customer', 'agent', 'admin', 'manager']),
   customerValidator.getCustomerOrdersValidation,
   handleValidationErrors,
   customerController.getCustomerOrders
