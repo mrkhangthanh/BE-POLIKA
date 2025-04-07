@@ -21,10 +21,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^[0-9]{10,11}$/, 'Phone number must be 10-11 digits']
   },
+
   role: {
     type: String,
     enum: ['admin', 'manager', 'content_writer', 'customer', 'technician', 'agent'],
-    default: 'customer'
+    required: [true, 'Vai trò là bắt buộc']
   },
   address: {
     street: { type: String, required: false },
@@ -70,7 +71,8 @@ const userSchema = new mongoose.Schema({
   indexes: [
     { key: { email: 1 }, unique: true },
     { key: { phone_number: 1 }, unique: true },
-    { key: { role: 1 } }
+    { key: { role: 1 } },
+    { key: { refresh_token: 1 } }
   ]
 });
 

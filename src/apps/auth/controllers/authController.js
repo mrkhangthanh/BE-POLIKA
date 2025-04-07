@@ -12,47 +12,57 @@ exports.login = async (req, res) => {
     const { identifier, email, password } = req.body;
     const loginValue = identifier || email;
 
-    // [SỬA] Tách biệt lỗi email/số điện thoại không tồn tại và mật khẩu sai
+    if (!loginValue || !password) {
+      return res.status(400).json({ error: 'Vui lòng nhập email hoặc Số điện thoại and password.' });
+    }
+
+    // Tìm người dùng với index để tăng hiệu suất
     const user = await UserModel.findOne({
       $or: [{ email: loginValue }, { phone_number: loginValue }],
-    }).lean();
+    })
+      .select('+password') // Chọn trường password
+      .lean();
     if (!user) {
-      return res.status(401).json({ error: 'Email or phone number does not exist.' });
+      return res.status(401).json({ error: 'Email hoặc số điện thoại không tồn tại.' });
     }
 
+    // So sánh mật khẩu
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Incorrect password.' });
+      return res.status(401).json({ error: 'Mật Khẩu Không Đúng.' });
     }
 
+    // Kiểm tra trạng thái tài khoản
     if (user.status !== 'active') {
-      return res.status(403).json({ error: 'Your account is inactive.' });
+      return res.status(403).json({ error: 'Tài khoản đã bị khóa.' });
     }
 
-    // Tạo access token (hết hạn sau 1 giờ)
+    // Tạo access token và refresh token
     const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    // [THÊM] Tạo refresh token (hết hạn sau 7 ngày)
     const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // [THÊM] Lưu refresh token vào database
+    // Lưu refresh token vào database
     await UserModel.updateOne(
       { _id: user._id },
       {
         refresh_token: refreshToken,
-        refresh_token_expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 ngày
+        refresh_token_expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
         last_login: new Date(),
       }
     );
 
+    // Loại bỏ các trường nhạy cảm trước khi trả về
+    const { password: _, refresh_token: __, ...userData } = user;
+
     const loginMethod = /^\S+@\S+\.\S+$/.test(loginValue) ? 'email' : 'phone_number';
     logger.info(`User logged in: ${loginValue} (ID: ${user._id}) via ${loginMethod}`);
 
- // [SỬA] Trả về cả access token và refresh token
- res.status(200).json({ success: true, accessToken, refreshToken, user: user });
-} catch (err) {
-  logger.error(`Login error: ${err.message}`);
-  res.status(500).json({ error: 'Internal server error', details: err.message });
-}
+
+    res.status(200).json({ success: true, accessToken, refreshToken, user: userData });
+  } catch (err) {
+    logger.error(`Login error: ${err.message}`);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
 };
 // Đăng ký (cho khách hàng)
 exports.register = async (req, res) => {
@@ -62,9 +72,15 @@ exports.register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, address, avatar, referred_by } = req.body;
+    const { name, email, password, phone_number, address, avatar, referred_by, role } = req.body;
 
-    // [SỬA] Kiểm tra email hoặc phone_number đã tồn tại
+    // 🔴 [SỬA] Kiểm tra vai trò hợp lệ
+    const allowedRoles = ['customer', 'technician'];
+    if (!role || !allowedRoles.includes(role)) {
+      return res.status(400).json({ error: 'Vai trò không hợp lệ. Chỉ chấp nhận customer hoặc technician.' });
+    }
+
+    // Kiểm tra email hoặc phone_number đã tồn tại
     const queryConditions = [];
     if (email) queryConditions.push({ email });
     if (phone_number) queryConditions.push({ phone_number });
@@ -86,12 +102,12 @@ exports.register = async (req, res) => {
 
     // Tạo userData với các trường không bắt buộc được xử lý
     const userData = {
-      name: name || undefined, // Không bắt buộc
-      email: email || undefined, // Một trong email hoặc phone_number phải có (đã được validate)
+      name: name || undefined,
+      email: email || undefined,
       password,
       phone_number: phone_number || undefined,
-      role: 'customer',
-      address: address || {}, // Không bắt buộc, để trống nếu không có
+      role: role, // 🔴 [SỬA] Lấy role từ req.body thay vì hardcode
+      address: address || {},
       avatar: avatar || null,
       referred_by: referred_by || null,
     };
