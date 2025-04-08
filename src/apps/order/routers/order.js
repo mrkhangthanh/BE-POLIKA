@@ -21,7 +21,7 @@ router.post(
 router.get(
   '/customer/orders',
   authMiddleware,
-  requireRole(['customer', 'agent', 'admin', 'manager']),
+  // requireRole(['customer', 'agent', 'admin', 'manager', 'technician']),
   customerValidator.getCustomerOrdersValidation,
   handleValidationErrors,
   customerController.getCustomerOrders
@@ -77,5 +77,7 @@ router.get(
   authMiddleware,
   customerController.getOrderById
 );
+
+router.get('/category-service', authMiddleware, customerController.getCategoryService); 
 
 module.exports = router;

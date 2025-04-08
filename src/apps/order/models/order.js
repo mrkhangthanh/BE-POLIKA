@@ -1,4 +1,5 @@
 const mongoose = require('../../../common/init.myDB')();
+const ServiceType = require('../models/serviceType');
 
 const orderSchema = new mongoose.Schema({
   customer_id: {
@@ -13,11 +14,14 @@ const orderSchema = new mongoose.Schema({
   },
   service_type: {
     type: String,
-    enum: {
-      values: ['plumbing', 'electrical', 'carpentry', 'hvac'],
-      message: 'Service type must be one of: plumbing, electrical, carpentry, hvac',
-    },
     required: true,
+    validate: {
+      validator: async function (value) {
+        const serviceType = await ServiceType.findOne({ value });
+        return !!serviceType; // Trả về true nếu giá trị tồn tại trong ServiceType
+      },
+      message: 'Invalid service type',
+    },
   },
   description: {
     type: String,

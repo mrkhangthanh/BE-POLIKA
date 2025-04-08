@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const OrderService = require('../services/orderService');
 const pagination = require('../../../libs/pagination');
+const ServiceType = require('../models/serviceType'); // Import danh sách service_types
 
 exports.createOrder = async (req, res) => {
   try {
@@ -60,6 +61,16 @@ exports.getOrderById = async (req, res) => {
   try {
     const order = await OrderService.getOrderById(req.user._id, req.params.id);
     res.status(200).json({ success: true, order });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// API mới: Lấy danh sách service_types
+exports.getCategoryService = async (req, res) => {
+  try {
+    const serviceTypes = await ServiceType.find();
+    res.status(200).json({ success: true, service_types: serviceTypes });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }

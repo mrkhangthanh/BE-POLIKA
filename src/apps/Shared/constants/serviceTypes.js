@@ -1,7 +1,9 @@
 module.exports = {
-    PLUMBING: 'plumbing',
-    ELECTRICAL: 'electrical',
-    CARPENTRY: 'carpentry',
-    HVAC: 'hvac',
-    VALID_SERVICE_TYPES: ['plumbing', 'electrical', 'carpentry', 'hvac'],
+  DienNuoc: 'Điện nước',
+  DonVeSinh: 'Dọn vệ sinh',
+  SuaMayGiat: 'Sửa máy giặt',
+  DieuHoa: 'Điều hòa',
+  ChongTham: 'Chống thấm',
+  other: 'Khác',
+    VALID_SERVICE_TYPES: ['DienNuoc', 'DonVeSinh', 'SuaMayGiat', 'DieuHoa','ChongTham', 'other'],
   };
