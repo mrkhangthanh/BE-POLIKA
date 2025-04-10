@@ -1,4 +1,5 @@
 const UserModel = require('../../auth/models/user');
+const mongoose = require('mongoose');
 const OrderModel = require('../../order/models/order');
 const logger = require('../../../libs/logger');
 const { VALID_SERVICE_TYPES } = require('../../Shared/constants/serviceTypes');
@@ -67,6 +68,10 @@ class OrderService {
   // Cập nhật sửa đơn hàng
   static async updateOrder(userId, orderId, orderData) {
     const { address, price, phone_number, description } = orderData;
+    // Kiểm tra orderId có phải là ObjectId hợp lệ không
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    throw new Error('Invalid order ID.');
+  }
 
     // Tìm đơn hàng
     const order = await OrderModel.findById(orderId);
