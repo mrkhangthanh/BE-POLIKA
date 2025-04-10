@@ -26,11 +26,16 @@ router.get(
   handleValidationErrors,
   customerController.getCustomerOrders
 );
-
+router.put('/orders/:id',
+   authMiddleware,
+   requireRole(['customer'], { readOnly: true }),
+    customerValidator.updateOrderValidation,
+     customerController.updateOrder
+    );
 router.put(
   '/orders/:id/cancel',
   authMiddleware,
-  requireRole(['customer']),
+  requireRole(['customer'], { readOnly: true }),
   customerController.cancelOrder
 );
 
