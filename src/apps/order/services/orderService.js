@@ -11,6 +11,8 @@ class OrderService {
   static async createOrder(userId, orderData) {
     const { service_type, description, address, phone_number, price } = orderData;
 
+    console.log('Received Order Data in createOrder:', JSON.stringify(orderData, null, 2)); // Log dữ liệu nhận được
+
     // Kiểm tra loại dịch vụ
     if (!VALID_SERVICE_TYPES.includes(service_type)) {
       throw new Error(`Invalid service type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}`);
@@ -22,31 +24,14 @@ class OrderService {
       throw new Error('User not found.');
     }
 
-    // Kiểm tra và cập nhật phone_number
-    let orderPhoneNumber = user.phone_number;
-    if (!orderPhoneNumber) {
-      if (!phone_number) {
-        throw new Error('Phone number is required. Please provide a phone number.');
-      }
-      orderPhoneNumber = phone_number;
-      user.phone_number = phone_number;
+    // Kiểm tra phone_number
+    if (!phone_number) {
+      throw new Error('Phone number is required. Please provide a phone number.');
     }
 
-    // Kiểm tra và cập nhật address
-    let orderAddress = user.address;
-    const isAddressComplete = orderAddress?.street && orderAddress?.city && orderAddress?.district && orderAddress?.ward;
-
-    if (!isAddressComplete) {
-      if (!address || !address.street || !address.city || !address.district || !address.ward) {
-        throw new Error('Address is required. Please provide street, city, district, and ward.');
-      }
-      orderAddress = address;
-      user.address = address;
-    }
-
-    // Lưu user nếu có thay đổi
-    if (!user.phone_number || !isAddressComplete) {
-      await user.save();
+    // Kiểm tra address
+    if (!address || !address.street || !address.city || !address.district || !address.ward) {
+      throw new Error('Address is required. Please provide street, city, district, and ward.');
     }
 
     // Tạo đơn hàng
@@ -55,23 +40,34 @@ class OrderService {
       service_type,
       description,
       price,
-      address: orderAddress,
-      phone_number: orderPhoneNumber,
+      address: {
+        street: address.street,
+        city: address.city,
+        district: address.district,
+        ward: address.ward,
+        country: address.country || 'Vietnam',
+      },
+      phone_number,
       status: PENDING,
     });
 
     const savedOrder = await newOrder.save();
+
+    console.log('Saved Order:', JSON.stringify(savedOrder, null, 2)); // Log đơn hàng đã lưu
+
     logger.info(`Order created for user: ${user.email || user.phone_number} (ID: ${user._id}, Order ID: ${savedOrder._id})`);
 
-    return savedOrder;
+    return savedOrder.toObject();
   }
-  // Cập nhật sửa đơn hàng
+
+  // Cập nhật sửa đơn hàng
   static async updateOrder(userId, orderId, orderData) {
     const { address, price, phone_number, description } = orderData;
+
     // Kiểm tra orderId có phải là ObjectId hợp lệ không
-  if (!mongoose.Types.ObjectId.isValid(orderId)) {
-    throw new Error('Invalid order ID.');
-  }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      throw new Error('Invalid order ID.');
+    }
 
     // Tìm đơn hàng
     const order = await OrderModel.findById(orderId);
@@ -102,7 +98,7 @@ class OrderService {
         throw new Error('Price must be a non-negative number.');
       }
       order.price = price;
-      order.total_amount = price; // Cập nhật total_amount
+      order.total_amount = price;
     }
     if (phone_number) {
       order.phone_number = phone_number;
@@ -126,7 +122,7 @@ class OrderService {
 
     return updatedOrder;
   }
-  
+
   // Lấy danh sách đơn hàng của khách hàng
   static async getCustomerOrders(userId, query) {
     const { page = 1, limit = 10, sortBy = 'created_at', sortOrder = 'desc', status } = query;
