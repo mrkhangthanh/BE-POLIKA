@@ -50,4 +50,7 @@ router.patch(
 // [THÊM] Route đăng xuất
 router.post('/logout', authMiddleware, authController.logout);
 
+// [THÊM] Route lấy thông tin người dùng
+router.get('/user-info', authMiddleware, authController.getUserInfo);
+
 module.exports = router;

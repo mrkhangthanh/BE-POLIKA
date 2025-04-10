@@ -1,3 +1,4 @@
+// order/services/orderService.js
 const UserModel = require('../../auth/models/user');
 const mongoose = require('mongoose');
 const OrderModel = require('../../order/models/order');
@@ -24,9 +25,10 @@ class OrderService {
       throw new Error('User not found.');
     }
 
-    // Kiểm tra phone_number
-    if (!phone_number) {
-      throw new Error('Phone number is required. Please provide a phone number.');
+    // Sử dụng số điện thoại từ UserModel nếu không có phone_number trong orderData
+    const finalPhoneNumber = phone_number || user.phone_number;
+    if (!finalPhoneNumber) {
+      throw new Error('Phone number is required. Please provide a phone number in your profile or in the order.');
     }
 
     // Kiểm tra address
@@ -47,7 +49,7 @@ class OrderService {
         ward: address.ward,
         country: address.country || 'Vietnam',
       },
-      phone_number,
+      phone_number: finalPhoneNumber, // Sử dụng số điện thoại đã xác định
       status: PENDING,
     });
 
@@ -57,7 +59,13 @@ class OrderService {
 
     logger.info(`Order created for user: ${user.email || user.phone_number} (ID: ${user._id}, Order ID: ${savedOrder._id})`);
 
-    return savedOrder.toObject();
+    // Trả về thông tin đơn hàng và số điện thoại của user
+    return {
+      order: savedOrder.toObject(),
+      user: {
+        phone_number: user.phone_number,
+      },
+    };
   }
 
   // Cập nhật sửa đơn hàng
