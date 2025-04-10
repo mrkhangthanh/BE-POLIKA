@@ -98,7 +98,7 @@ class OrderService {
 
     logger.info(`Customer ${user.email || user.phone_number} (ID: ${user._id}) viewed their orders.`);
 
-    return { orders: ordersWithCustomerInfo, total: await OrderModel.countDocuments(queryConditions) };
+    return { orders: ordersWithCustomerInfo };
   }
 
   // Hủy đơn hàng

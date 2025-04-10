@@ -6,8 +6,9 @@
  * @param {Object} [query={}] - Điều kiện lọc
  * @returns {Object} - Thông tin phân trang
  */
-module.exports = async (page = 1, limit = 15, Model, query = {}) => {
+module.exports = async (page = 1, limit = 15, Model, query = {}, filter = {}) => {
     try {
+      const total = await Model.countDocuments(filter); // Áp dụng filter
       // Chuẩn hóa tham số
       page = parseInt(page) || 1;
       limit = parseInt(limit) || 10;

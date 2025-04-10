@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const OrderService = require('../services/orderService');
 const pagination = require('../../../libs/pagination');
 const ServiceType = require('../models/serviceType'); // Import danh sách service_types
+const Order = require('../models/order'); // Import Order model
 
 exports.createOrder = async (req, res) => {
   try {
@@ -25,8 +26,9 @@ exports.getCustomerOrders = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, status } = req.query;
 
+    // Kiểm tra page và limit có phải là số hợp lệ
     if (isNaN(page) || isNaN(limit)) {
       return res.status(400).json({ error: 'Page and limit must be numbers.' });
     }
@@ -34,8 +36,17 @@ exports.getCustomerOrders = async (req, res) => {
       return res.status(400).json({ error: 'Limit cannot exceed 100.' });
     }
 
-    const { orders, total } = await OrderService.getCustomerOrders(req.user._id, req.query);
-    const paginationInfo = await pagination(page, limit, total);
+    // Tạo filter để đếm tổng số đơn hàng
+    const filter = { user: req.user._id };
+    if (status) {
+      filter.status = status;
+    }
+
+    // Lấy danh sách đơn hàng
+    const { orders } = await OrderService.getCustomerOrders(req.user._id, req.query);
+
+    // Tính thông tin phân trang với filter
+    const paginationInfo = await pagination(page, limit, Order, filter);
 
     res.status(200).json({
       success: true,
