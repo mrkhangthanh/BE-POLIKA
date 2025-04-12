@@ -4,6 +4,7 @@ module.exports = {
   SuaMayGiat: 'Sửa máy giặt',
   DieuHoa: 'Điều hòa',
   ChongTham: 'Chống thấm',
-  other: 'Khác',
-    VALID_SERVICE_TYPES: ['DienNuoc', 'DonVeSinh', 'SuaMayGiat', 'DieuHoa','ChongTham', 'other'],
+  ThoXayDung: 'Thợ xây dựng',
+  other: 'Khác...',
+    VALID_SERVICE_TYPES: ['DienNuoc', 'DonVeSinh', 'SuaMayGiat', 'DieuHoa','ChongTham','ThoXayDung', 'other'],
   };

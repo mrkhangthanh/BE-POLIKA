@@ -82,7 +82,31 @@ router.get(
   authMiddleware,
   customerController.getOrderById
 );
-
+// Route mới: Lấy danh sách dịch vụ (service_types)
 router.get('/category-service', authMiddleware, customerController.getCategoryService); 
+// Route mới
+router.post(
+  '/category-service',
+  authMiddleware,
+  // [
+  //   body('value').notEmpty().withMessage('Giá trị (value) là bắt buộc.'),
+  //   body('label').notEmpty().withMessage('Tên danh mục (label) là bắt buộc.'),
+  //   body('isActive').optional().isBoolean().withMessage('Trạng thái (isActive) phải là boolean.'),
+  // ],
+  customerController.createCategoryService
+);
+
+router.put(
+  '/category-service/:id',
+  authMiddleware,
+  // [
+  //   body('value').optional().notEmpty().withMessage('Giá trị (value) không được để trống.'),
+  //   body('label').optional().notEmpty().withMessage('Tên danh mục (label) không được để trống.'),
+  //   body('isActive').optional().isBoolean().withMessage('Trạng thái (isActive) phải là boolean.'),
+  // ],
+  customerController.updateCategoryService
+);
+
+router.delete('/category-service/:id', authMiddleware, customerController.deleteCategoryService);
 
 module.exports = router;

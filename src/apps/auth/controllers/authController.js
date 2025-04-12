@@ -1,10 +1,39 @@
+// auth/controllers/authController.js
 const UserModel = require('../models/user');
 const logger = require('../../../libs/logger');
-const {addToBlacklist} = require('../../../common/init.redis');
+const { addToBlacklist } = require('../../../common/init.redis');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 
+// Hàm tách biệt để cập nhật hồ sơ (có thể tái sử dụng)
+const updateUserProfile = async (userId, data) => {
+  try {
+    // Tìm user
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new Error('User not found.');
+    }
+
+    // Cập nhật các trường được phép
+    if (data.name !== undefined) user.name = data.name;
+    if (data.address !== undefined) user.address = data.address;
+    if (data.avatar !== undefined) user.avatar = data.avatar;
+
+    const updatedUser = await user.save();
+
+    logger.info(`Profile updated for user: ${user.email || user.phone_number} (ID: ${user._id})`);
+
+    return {
+      success: true,
+      message: 'Profile updated successfully.',
+      user: updatedUser.toObject(),
+    };
+  } catch (err) {
+    logger.error(`Update profile error: ${err.message}`);
+    throw new Error(err.message || 'Internal server error');
+  }
+};
 
 // Đăng nhập
 exports.login = async (req, res) => {
@@ -20,7 +49,7 @@ exports.login = async (req, res) => {
     const user = await UserModel.findOne({
       $or: [{ email: loginValue }, { phone_number: loginValue }],
     })
-      .select('+password') // Chọn trường password
+      .select('+password')
       .lean();
     if (!user) {
       return res.status(401).json({ error: 'Email hoặc số điện thoại không tồn tại.' });
@@ -57,13 +86,13 @@ exports.login = async (req, res) => {
     const loginMethod = /^\S+@\S+\.\S+$/.test(loginValue) ? 'email' : 'phone_number';
     logger.info(`User logged in: ${loginValue} (ID: ${user._id}) via ${loginMethod}`);
 
-
     res.status(200).json({ success: true, accessToken, refreshToken, user: userData });
   } catch (err) {
     logger.error(`Login error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
 // Đăng ký (cho khách hàng)
 exports.register = async (req, res) => {
   try {
@@ -74,7 +103,7 @@ exports.register = async (req, res) => {
 
     const { name, email, password, phone_number, address, avatar, referred_by, role } = req.body;
 
-    // 🔴 [SỬA] Kiểm tra vai trò hợp lệ
+    // Kiểm tra vai trò hợp lệ
     const allowedRoles = ['customer', 'technician'];
     if (!role || !allowedRoles.includes(role)) {
       return res.status(400).json({ error: 'Vai trò không hợp lệ. Chỉ chấp nhận customer hoặc technician.' });
@@ -106,7 +135,7 @@ exports.register = async (req, res) => {
       email: email || undefined,
       password,
       phone_number: phone_number || undefined,
-      role: role, // 🔴 [SỬA] Lấy role từ req.body thay vì hardcode
+      role: role,
       address: address || {},
       avatar: avatar || null,
       referred_by: referred_by || null,
@@ -138,6 +167,7 @@ exports.register = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
 // [THÊM] Quên mật khẩu
 exports.forgotPassword = async (req, res) => {
   try {
@@ -313,6 +343,7 @@ exports.logout = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
 // [THÊM] API xem lịch sử trạng thái
 exports.getStatusHistory = async (req, res) => {
   try {
@@ -348,35 +379,18 @@ exports.updateProfile = async (req, res) => {
     const userId = req.user._id; // Lấy từ authMiddleware
     const { name, address, avatar } = req.body;
 
-    // Tìm user
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
+    const result = await updateUserProfile(userId, { name, address, avatar });
 
-    // Cập nhật các trường được phép
-    if (name !== undefined) user.name = name;
-    if (address !== undefined) user.address = address;
-    if (avatar !== undefined) user.avatar = avatar;
-
-    const updatedUser = await user.save();
-
-    logger.info(`Profile updated for user: ${user.email || user.phone_number} (ID: ${user._id})`);
-
-    res.status(200).json({
-      success: true,
-      message: 'Profile updated successfully.',
-      user: updatedUser.toObject(),
-    });
+    res.status(200).json(result);
   } catch (err) {
-    logger.error(`Update profile error: ${err.message}`);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
 // [THÊM] API lấy thông tin người dùng (không bao gồm mật khẩu và refresh token)
 exports.getUserInfo = async (req, res) => {
   try {
-    const user = await UserModel.findById(req.user._id).select('phone_number address');
+    const user = await UserModel.findById(req.user._id).select('name email phone_number address role specialization');
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
@@ -385,3 +399,6 @@ exports.getUserInfo = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+// Export updateUserProfile để sử dụng ở các file khác
+exports.updateUserProfile = updateUserProfile;

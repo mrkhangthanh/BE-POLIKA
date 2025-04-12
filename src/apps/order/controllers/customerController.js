@@ -102,3 +102,92 @@ exports.getCategoryService = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+// API mới: Tạo danh mục dịch vụ (POST /category-service)
+exports.createCategoryService = async (req, res) => {
+  try {
+    // Kiểm tra dữ liệu đầu vào
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { value, label, isActive } = req.body;
+
+    // Kiểm tra xem value đã tồn tại chưa
+    const existingServiceType = await ServiceType.findOne({ value });
+    if (existingServiceType) {
+      return res.status(400).json({ error: 'Giá trị (value) đã tồn tại.' });
+    }
+
+    // Tạo danh mục dịch vụ mới
+    const newServiceType = new ServiceType({
+      value,
+      label,
+      isActive: isActive !== undefined ? isActive : true, // Mặc định là true nếu không cung cấp
+    });
+
+    const savedServiceType = await newServiceType.save();
+    res.status(201).json({ success: true, service_type: savedServiceType });
+  } catch (err) {
+    console.error('Error in createCategoryService:', err);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// API mới: Cập nhật danh mục dịch vụ (PUT /category-service/:id)
+exports.updateCategoryService = async (req, res) => {
+  try {
+    // Kiểm tra dữ liệu đầu vào
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const { value, label, isActive } = req.body;
+
+    // Tìm danh mục dịch vụ theo ID
+    const serviceType = await ServiceType.findById(id);
+    if (!serviceType) {
+      return res.status(404).json({ error: 'Danh mục dịch vụ không tồn tại.' });
+    }
+
+    // Kiểm tra xem value mới có trùng với danh mục khác không
+    if (value && value !== serviceType.value) {
+      const existingServiceType = await ServiceType.findOne({ value });
+      if (existingServiceType) {
+        return res.status(400).json({ error: 'Giá trị (value) đã tồn tại.' });
+      }
+    }
+
+    // Cập nhật các trường
+    if (value) serviceType.value = value;
+    if (label) serviceType.label = label;
+    if (isActive !== undefined) serviceType.isActive = isActive;
+
+    const updatedServiceType = await serviceType.save();
+    res.status(200).json({ success: true, service_type: updatedServiceType });
+  } catch (err) {
+    console.error('Error in updateCategoryService:', err);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+// API mới: Xóa danh mục dịch vụ (DELETE /category-service/:id)
+exports.deleteCategoryService = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Tìm và xóa danh mục dịch vụ theo ID
+    const serviceType = await ServiceType.findByIdAndDelete(id);
+    if (!serviceType) {
+      return res.status(404).json({ error: 'Danh mục dịch vụ không tồn tại.' });
+    }
+
+    res.status(200).json({ success: true, message: 'Danh mục dịch vụ đã được xóa.' });
+  } catch (err) {
+    console.error('Error in deleteCategoryService:', err);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
