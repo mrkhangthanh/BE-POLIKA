@@ -9,13 +9,11 @@ const { body, validationResult } = require('express-validator');
 // Hàm tách biệt để cập nhật hồ sơ (có thể tái sử dụng)
 const updateUserProfile = async (userId, data) => {
   try {
-    // Tìm user
     const user = await UserModel.findById(userId);
     if (!user) {
       throw new Error('User not found.');
     }
 
-    // Cập nhật các trường được phép
     if (data.name !== undefined) user.name = data.name;
     if (data.address !== undefined) user.address = data.address;
     if (data.avatar !== undefined) user.avatar = data.avatar;
@@ -45,7 +43,6 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Vui lòng nhập email hoặc Số điện thoại and password.' });
     }
 
-    // Tìm người dùng với index để tăng hiệu suất
     const user = await UserModel.findOne({
       $or: [{ email: loginValue }, { phone_number: loginValue }],
     })
@@ -55,22 +52,18 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Email hoặc số điện thoại không tồn tại.' });
     }
 
-    // So sánh mật khẩu
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Mật Khẩu Không Đúng.' });
     }
 
-    // Kiểm tra trạng thái tài khoản
     if (user.status !== 'active') {
       return res.status(403).json({ error: 'Tài khoản đã bị khóa.' });
     }
 
-    // Tạo access token và refresh token
     const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    // Lưu refresh token vào database
     await UserModel.updateOne(
       { _id: user._id },
       {
@@ -80,7 +73,6 @@ exports.login = async (req, res) => {
       }
     );
 
-    // Loại bỏ các trường nhạy cảm trước khi trả về
     const { password: _, refresh_token: __, ...userData } = user;
 
     const loginMethod = /^\S+@\S+\.\S+$/.test(loginValue) ? 'email' : 'phone_number';
@@ -93,7 +85,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// Đăng ký (cho khách hàng)
+// Đăng ký (cho khách hàng và thợ)
 exports.register = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -101,12 +93,17 @@ exports.register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, address, avatar, referred_by, role } = req.body;
+    const { name, email, password, phone_number, address, avatar, referred_by, role, services } = req.body;
 
     // Kiểm tra vai trò hợp lệ
     const allowedRoles = ['customer', 'technician'];
     if (!role || !allowedRoles.includes(role)) {
       return res.status(400).json({ error: 'Vai trò không hợp lệ. Chỉ chấp nhận customer hoặc technician.' });
+    }
+
+    // Nếu là thợ, kiểm tra xem có services không
+    if (role === 'technician' && (!services || !Array.isArray(services) || services.length === 0)) {
+      return res.status(400).json({ error: 'Thợ phải chọn ít nhất một lĩnh vực công việc.' });
     }
 
     // Kiểm tra email hoặc phone_number đã tồn tại
@@ -139,6 +136,7 @@ exports.register = async (req, res) => {
       address: address || {},
       avatar: avatar || null,
       referred_by: referred_by || null,
+      services: role === 'technician' ? services : [], // Lưu danh sách services nếu là thợ
     };
 
     const user = new UserModel(userData);
@@ -157,10 +155,8 @@ exports.register = async (req, res) => {
       }
     );
 
-    // Ghi log đăng ký với email hoặc phone_number
     logger.info(`User registered: ${email || phone_number} (ID: ${savedUser._id})`);
 
-    // Trả về cả access token và refresh token
     res.status(201).json({ success: true, accessToken, refreshToken, user: savedUser.toObject() });
   } catch (err) {
     logger.error(`Register error: ${err.message}`);
@@ -168,7 +164,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// [THÊM] Quên mật khẩu
+// Quên mật khẩu
 exports.forgotPassword = async (req, res) => {
   try {
     const { identifier, email } = req.body;
@@ -181,16 +177,13 @@ exports.forgotPassword = async (req, res) => {
       return res.status(404).json({ error: 'Email or phone number does not exist.' });
     }
 
-    // Tạo token reset mật khẩu (hết hạn sau 15 phút)
     const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '15m' });
 
-    // Lưu token vào database
     await UserModel.updateOne(
       { _id: user._id },
       { reset_password_token: resetToken, reset_password_expires: Date.now() + 15 * 60 * 1000 }
     );
 
-    // Giả lập gửi email (trong thực tế, bạn sẽ dùng một dịch vụ email như nodemailer)
     const resetLink = `http://localhost:8000/api/v1/reset-password?token=${resetToken}`;
     logger.info(`Password reset link for ${user.email}: ${resetLink}`);
 
@@ -201,12 +194,11 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-// [THÊM] Reset mật khẩu
+// Reset mật khẩu
 exports.resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    // Xác thực token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await UserModel.findOne({
       _id: decoded.id,
@@ -217,21 +209,17 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired reset token.' });
     }
 
-    // Cập nhật mật khẩu mới
     user.password = newPassword;
     user.reset_password_token = null;
     user.reset_password_expires = null;
 
-    // [THÊM] Đánh dấu tất cả token cũ là dirty và xóa các phiên đăng nhập
     const userId = user._id.toString();
     const sessions = await redisClient.lRange(`sessions:${userId}`, 0, -1);
 
-    // Thêm tất cả token vào blacklist
     const currentTime = Math.floor(Date.now() / 1000);
     for (const session of sessions) {
       const { accessToken, refreshToken } = JSON.parse(session);
 
-      // Thêm access token vào blacklist
       if (accessToken) {
         try {
           const decodedAccess = jwt.verify(accessToken, process.env.JWT_SECRET);
@@ -244,7 +232,6 @@ exports.resetPassword = async (req, res) => {
         }
       }
 
-      // Thêm refresh token vào blacklist
       if (refreshToken) {
         try {
           const decodedRefresh = jwt.verify(refreshToken, process.env.JWT_SECRET);
@@ -258,15 +245,12 @@ exports.resetPassword = async (req, res) => {
       }
     }
 
-    // Xóa tất cả phiên đăng nhập trong Redis
     await redisClient.del(`sessions:${userId}`);
 
-    // Xóa refresh token trong UserModel (nếu có)
     if (user.refreshToken) {
       user.refreshToken = null;
     }
 
-    // Lưu user
     await user.save();
 
     logger.info(`Password reset successful for user: ${user.email} (ID: ${user._id})`);
@@ -278,12 +262,11 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// [THÊM] Làm mới access token
+// Làm mới access token
 exports.refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
-    // Xác thực refresh token
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     const user = await UserModel.findOne({
       _id: decoded.id,
@@ -294,7 +277,6 @@ exports.refreshToken = async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired refresh token.' });
     }
 
-    // Tạo access token mới
     const newAccessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     logger.info(`Access token refreshed for user: ${user.email} (ID: ${user._id})`);
@@ -306,25 +288,21 @@ exports.refreshToken = async (req, res) => {
   }
 };
 
-// [THÊM hoặc CẬP NHẬT] API đăng xuất
+// Đăng xuất
 exports.logout = async (req, res) => {
   try {
-    const token = req.token; // Lấy token từ req (đã được gán trong authMiddleware)
+    const token = req.token;
     if (!token) {
       return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
 
-    // Xác minh token để lấy thời gian hết hạn
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Tính thời gian còn lại của token (để set TTL trong Redis)
     const currentTime = Math.floor(Date.now() / 1000);
     const expiresIn = decoded.exp - currentTime;
 
-    // Thêm access token vào blacklist
     await addToBlacklist(token, expiresIn);
 
-    // [TÙY CHỌN] Nếu bạn lưu refresh token trong database, có thể xóa hoặc đánh dấu nó là không hợp lệ
     const user = await UserModel.findById(decoded.id);
     if (user.refreshToken) {
       const refreshToken = user.refreshToken;
@@ -344,12 +322,11 @@ exports.logout = async (req, res) => {
   }
 };
 
-// [THÊM] API xem lịch sử trạng thái
+// Xem lịch sử trạng thái
 exports.getStatusHistory = async (req, res) => {
   try {
     const { userId } = req.query;
 
-    // Tìm user và chỉ lấy trường status_history
     const user = await UserModel.findById(userId, 'status status_history');
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -368,7 +345,7 @@ exports.getStatusHistory = async (req, res) => {
   }
 };
 
-// [THÊM] API cập nhật hồ sơ
+// Cập nhật hồ sơ
 exports.updateProfile = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -376,7 +353,7 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const userId = req.user._id; // Lấy từ authMiddleware
+    const userId = req.user._id;
     const { name, address, avatar } = req.body;
 
     const result = await updateUserProfile(userId, { name, address, avatar });
@@ -387,10 +364,10 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// [THÊM] API lấy thông tin người dùng (không bao gồm mật khẩu và refresh token)
+// Lấy thông tin người dùng
 exports.getUserInfo = async (req, res) => {
   try {
-    const user = await UserModel.findById(req.user._id).select('name email phone_number address role specialization');
+    const user = await UserModel.findById(req.user._id).select('name email phone_number address role specialization services');
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }

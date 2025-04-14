@@ -21,12 +21,13 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^[0-9]{10,11}$/, 'Phone number must be 10-11 digits']
   },
-
   role: {
     type: String,
     enum: ['admin', 'manager', 'content_writer', 'customer', 'technician', 'agent'],
     required: [true, 'Vai trò là bắt buộc']
   },
+  services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceType' }], // Lưu danh sách ID dịch vụ
+  fcmToken: { type: String }, // Thêm trường để lưu FCM token
   address: {
     street: { type: String, required: false },
     city: { type: String, required: false },
@@ -34,18 +35,17 @@ const userSchema = new mongoose.Schema({
     ward: { type: String, required: false },
     country: { type: String, default: 'Vietnam' }
   },
-  specialization: {
-    type: [String],
-    required: function () { return this.role === 'technician'; },
-    default: [],
-    enum: ['plumbing', 'electrical', 'carpentry', 'hvac']
-  },
+  // specialization: {
+  //   type: [String],
+  //   required: false, // Bỏ yêu cầu bắt buộc
+  //   default: [],
+  //   enum: ['plumbing', 'electrical', 'carpentry', 'hvac']
+  // },
   avatar: { type: String, default: null },
   referred_by: { 
-  // type: mongoose.Schema.Types.ObjectId, ref: 'Users', default: null
-  type: String,
-   default: null
-   },
+    type: String,
+    default: null
+  },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   commission: {
     type: Number,

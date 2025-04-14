@@ -1,8 +1,10 @@
 const { validationResult } = require('express-validator');
 const OrderService = require('../services/orderService');
 const pagination = require('../../../libs/pagination');
-const ServiceType = require('../models/serviceType'); // Import danh sách service_types
-const Order = require('../models/order'); // Import Order model
+const ServiceType = require('../models/serviceType');
+const Order = require('../models/order');
+const UserModel = require('../../auth/models/user');
+const { sendPushNotification } = require('../../../../firebase');
 
 exports.createOrder = async (req, res) => {
   try {
@@ -11,15 +13,66 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    console.log('Received Order Data in createOrder:', JSON.stringify(req.body, null, 2)); // Log dữ liệu nhận được
+    console.log('Received Order Data in createOrder:', JSON.stringify(req.body, null, 2));
 
-    const order = await OrderService.createOrder(req.user._id, req.body);
+    const { service_type, description, address, phone_number, price } = req.body;
+
+    // Đảm bảo service_type là bắt buộc
+    if (!service_type) {
+      return res.status(400).json({ error: 'Service type is required.' });
+    }
+
+    // Tìm _id của service_type dựa trên value
+    const serviceType = await ServiceType.findOne({ value: service_type });
+    if (!serviceType) {
+      return res.status(400).json({ error: `Invalid service type: ${service_type}. Must match a valid service type in the database.` });
+    }
+
+    // Tạo đơn hàng
+    const orderData = {
+      ...req.body,
+      service_type: serviceType._id, // Lưu _id của service_type vào đơn hàng
+    };
+    const order = await OrderService.createOrder(req.user._id, orderData);
+
+    // Tìm các thợ phù hợp dựa trên service_type của đơn hàng
+    const technicians = await UserModel.find({
+      role: 'technician',
+      services: serviceType._id, // Tìm thợ có lĩnh vực phù hợp
+    });
+
+    // Gửi thông báo push đến các thợ
+    const notificationTitle = 'Đơn hàng mới!';
+    const notificationBody = `Một đơn hàng mới trong lĩnh vực ${serviceType.label} vừa được tạo. Kiểm tra ngay!`;
+
+    const notificationPromises = technicians.map(async (technician) => {
+      if (technician.fcmToken) {
+        try {
+          await sendPushNotification(
+            technician.fcmToken,
+            notificationTitle,
+            notificationBody
+          );
+          console.log(`Đã gửi thông báo đến thợ ${technician.name} (ID: ${technician._id})`);
+        } catch (notificationError) {
+          console.error(`Failed to send notification to technician ${technician.name} (ID: ${technician._id}):`, notificationError);
+        }
+      } else {
+        console.log(`Thợ ${technician.name} (ID: ${technician._id}) không có FCM token.`);
+      }
+    });
+
+    // Chờ tất cả thông báo được gửi (nhưng không làm ảnh hưởng đến response chính)
+    await Promise.all(notificationPromises);
+
     res.status(201).json({ success: true, order });
   } catch (err) {
     console.error('Error in createOrder:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+// Các hàm khác giữ nguyên
 exports.updateOrder = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -34,6 +87,54 @@ exports.updateOrder = async (req, res) => {
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };
+
+
+// exports.getCustomerOrders = async (req, res) => {
+//   try {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({ errors: errors.array() });
+//     }
+
+//     const { page = 1, limit = 10, status } = req.query;
+//     console.log('Query params:', { page, limit, status }); // Log query params
+
+//     if (isNaN(page) || isNaN(limit)) {
+//       return res.status(400).json({ error: 'Page and limit must be numbers.' });
+//     }
+//     if (parseInt(limit) > 100) {
+//       return res.status(400).json({ error: 'Limit cannot exceed 100.' });
+//     }
+
+//     // Không giới hạn bởi customer_id, lấy tất cả đơn hàng
+//     const queryConditions = {};
+//     if (status) {
+//       queryConditions.status = status;
+//     }
+
+//     // Gọi OrderService.getCustomerOrders mà không truyền userId
+//     const { orders } = await OrderService.getCustomerOrders(req.query);
+
+//     console.log('Orders found in controller:', orders);
+
+//     // Sử dụng queryConditions cho pagination
+//     const paginationInfo = await pagination(page, limit, Order, queryConditions);
+
+//     console.log('Pagination info:', paginationInfo);
+
+//     res.status(200).json({
+//       success: true,
+//       orders,
+//       pagination: paginationInfo,
+//     });
+//   } catch (err) {
+//     console.error('Error in getCustomerOrders:', err);
+//     res.status(500).json({ error: 'Internal server error', details: err.message });
+//   }
+// };
+
+
+// lấy tất cả danh sách đơn hàng 
 
 exports.getCustomerOrders = async (req, res) => {
   try {
@@ -74,9 +175,56 @@ exports.getCustomerOrders = async (req, res) => {
   }
 };
 
+
+exports.getAllOrders = async (req, res) => {
+  try {
+ 
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { page = 1, limit = 10, status } = req.query;
+    console.log('Query params:', { page, limit, status }); // Log query params
+
+    if (isNaN(page) || isNaN(limit)) {
+      return res.status(400).json({ error: 'Page and limit must be numbers.' });
+    }
+    if (parseInt(limit) > 100) {
+      return res.status(400).json({ error: 'Limit cannot exceed 100.' });
+    }
+
+    // Không giới hạn bởi customer_id, lấy tất cả đơn hàng
+    const queryConditions = {};
+    if (status) {
+      queryConditions.status = status;
+    }
+
+    // Gọi OrderService.getCustomerOrders mà không truyền userId
+    const { orders } = await OrderService.getCustomerOrders(req.query);
+
+    console.log('Orders found in controller:', orders);
+
+    // Sử dụng queryConditions cho pagination
+    const paginationInfo = await pagination(page, limit, Order, queryConditions);
+
+    console.log('Pagination info:', paginationInfo);
+
+    res.status(200).json({
+      success: true,
+      orders,
+      pagination: paginationInfo,
+    });
+  } catch (err) {
+    console.error('Error in getAllOrders:', err);
+    res.status(500).json({ error: 'Internal server error', details: err.message });
+  }
+};
+
+
+
 exports.cancelOrder = async (req, res) => {
   try {
-
     const result = await OrderService.cancelOrder(req.user._id, req.params.id);
     res.status(200).json({ success: true, ...result });
   } catch (err) {
@@ -93,7 +241,6 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-// API mới: Lấy danh sách service_types
 exports.getCategoryService = async (req, res) => {
   try {
     const serviceTypes = await ServiceType.find();
@@ -103,10 +250,8 @@ exports.getCategoryService = async (req, res) => {
   }
 };
 
-// API mới: Tạo danh mục dịch vụ (POST /category-service)
 exports.createCategoryService = async (req, res) => {
   try {
-    // Kiểm tra dữ liệu đầu vào
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -114,17 +259,15 @@ exports.createCategoryService = async (req, res) => {
 
     const { value, label, isActive } = req.body;
 
-    // Kiểm tra xem value đã tồn tại chưa
     const existingServiceType = await ServiceType.findOne({ value });
     if (existingServiceType) {
       return res.status(400).json({ error: 'Giá trị (value) đã tồn tại.' });
     }
 
-    // Tạo danh mục dịch vụ mới
     const newServiceType = new ServiceType({
       value,
       label,
-      isActive: isActive !== undefined ? isActive : true, // Mặc định là true nếu không cung cấp
+      isActive: isActive !== undefined ? isActive : true,
     });
 
     const savedServiceType = await newServiceType.save();
@@ -135,10 +278,8 @@ exports.createCategoryService = async (req, res) => {
   }
 };
 
-// API mới: Cập nhật danh mục dịch vụ (PUT /category-service/:id)
 exports.updateCategoryService = async (req, res) => {
   try {
-    // Kiểm tra dữ liệu đầu vào
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -147,13 +288,11 @@ exports.updateCategoryService = async (req, res) => {
     const { id } = req.params;
     const { value, label, isActive } = req.body;
 
-    // Tìm danh mục dịch vụ theo ID
     const serviceType = await ServiceType.findById(id);
     if (!serviceType) {
       return res.status(404).json({ error: 'Danh mục dịch vụ không tồn tại.' });
     }
 
-    // Kiểm tra xem value mới có trùng với danh mục khác không
     if (value && value !== serviceType.value) {
       const existingServiceType = await ServiceType.findOne({ value });
       if (existingServiceType) {
@@ -161,7 +300,6 @@ exports.updateCategoryService = async (req, res) => {
       }
     }
 
-    // Cập nhật các trường
     if (value) serviceType.value = value;
     if (label) serviceType.label = label;
     if (isActive !== undefined) serviceType.isActive = isActive;
@@ -174,12 +312,10 @@ exports.updateCategoryService = async (req, res) => {
   }
 };
 
-// API mới: Xóa danh mục dịch vụ (DELETE /category-service/:id)
 exports.deleteCategoryService = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Tìm và xóa danh mục dịch vụ theo ID
     const serviceType = await ServiceType.findByIdAndDelete(id);
     if (!serviceType) {
       return res.status(404).json({ error: 'Danh mục dịch vụ không tồn tại.' });

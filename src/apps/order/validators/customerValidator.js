@@ -7,9 +7,7 @@ const { CUSTOMER_SORT_FIELDS, VALID_SORT_ORDERS } = require('../../Shared/consta
 exports.createOrderValidation = [
   body('service_type')
     .notEmpty()
-    .withMessage('Loại dịch vụ không được để trống.')
-    .isIn(VALID_SERVICE_TYPES)
-    .withMessage(`Loại dịch vụ phải là một trong: ${VALID_SERVICE_TYPES.join(', ')}`),
+    .withMessage('Loại dịch vụ không được để trống.'),
 
   body('description')
     .notEmpty()
@@ -123,6 +121,34 @@ exports.updateOrderValidation = [
 ];
 
 exports.getCustomerOrdersValidation = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Trang phải là một số nguyên dương.'),
+
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Giới hạn phải nằm trong khoảng từ 1 đến 100.'),
+
+  query('sortBy')
+    .optional()
+    .isIn(CUSTOMER_SORT_FIELDS)
+    .withMessage(`Sắp xếp theo phải là một trong: ${CUSTOMER_SORT_FIELDS.join(', ')}`),
+
+  query('sortOrder')
+    .optional()
+    .isIn(VALID_SORT_ORDERS)
+    .withMessage('Thứ tự sắp xếp phải là "asc" hoặc "desc".'),
+
+  query('status')
+    .optional()
+    .isIn(VALID_STATUSES)
+    .withMessage(`Trạng thái phải là một trong: ${VALID_STATUSES.join(', ')}`),
+];
+
+
+exports.getAllOrdersValidation = [
   query('page')
     .optional()
     .isInt({ min: 1 })

@@ -1,7 +1,9 @@
 const UserModel = require('../../auth/models/user');
+const ServiceTypeModel = require('../../order/models/serviceType'); // Thêm model ServiceType để kiểm tra ObjectId
 const { body, validationResult } = require('express-validator');
 const pagination = require('../../../libs/pagination');
 const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 
 // Tạo user (cho admin)
 exports.createUser = async (req, res) => {
@@ -11,7 +13,7 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone_number, role, address, specialization, referred_by, avatar } = req.body;
+    const { name, email, password, phone_number, role, address, services, referred_by, avatar } = req.body;
 
     // Kiểm tra email hoặc số điện thoại đã tồn tại
     const existingUser = await UserModel.findOne({ $or: [{ email }, { phone_number }] }).lean();
@@ -19,19 +21,21 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: 'Email or phone number already exists.' });
     }
 
-    // 🔴 [XÓA] Bỏ kiểm tra bắt buộc address
-    // if ((role === 'customer' || role === 'technician') && (!address || !address.street || !address.city || !address.district || !address.ward)) {
-    //   return res.status(400).json({ error: 'Address (street, city, district, ward) is required for customer and technician roles.' });
-    // }
-
-    // Kiểm tra specialization nếu role là technician
+    // Kiểm tra services nếu role là technician
     if (role === 'technician') {
-      if (!specialization || !Array.isArray(specialization) || specialization.length === 0) {
-        return res.status(400).json({ error: 'Specialization is required for technician role.' });
+      if (!services || !Array.isArray(services) || services.length === 0) {
+        return res.status(400).json({ error: 'Services are required for technician role.' });
       }
-      const validSpecializations = ['plumbing', 'electrical', 'carpentry', 'hvac'];
-      if (!specialization.every(spec => validSpecializations.includes(spec))) {
-        return res.status(400).json({ error: 'Invalid specialization. Must be one of: plumbing, electrical, carpentry, hvac' });
+
+      // Kiểm tra tính hợp lệ của các ObjectId trong services
+      if (!services.every(id => mongoose.Types.ObjectId.isValid(id))) {
+        return res.status(400).json({ error: 'Invalid service ID in services array.' });
+      }
+
+      // Kiểm tra xem các service ID có tồn tại trong collection ServiceType không
+      const validServices = await ServiceTypeModel.find({ _id: { $in: services } });
+      if (validServices.length !== services.length) {
+        return res.status(400).json({ error: 'One or more service IDs do not exist.' });
       }
     }
 
@@ -47,7 +51,7 @@ exports.createUser = async (req, res) => {
       phone_number,
       role,
       address, // address có thể là null
-      specialization: role === 'technician' ? specialization : undefined,
+      services: role === 'technician' ? services : undefined,
       referred_by,
       avatar,
       status: 'active',
@@ -67,7 +71,7 @@ exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 10, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
 
-    // [Cải thiện 5.2] Validation cho page và limit
+    // Validation cho page và limit
     if (isNaN(page) || isNaN(limit)) {
       return res.status(400).json({ error: 'Page and limit must be numbers.' });
     }
@@ -75,7 +79,7 @@ exports.getAllUsers = async (req, res) => {
       return res.status(400).json({ error: 'Limit cannot exceed 100.' });
     }
 
-    // [Cải thiện 5.2] Validation và xử lý sort
+    // Validation và xử lý sort
     const allowedSortFields = ['name', 'email', 'phone_number', 'created_at', 'role'];
     if (!allowedSortFields.includes(sortBy)) {
       return res.status(400).json({ error: `SortBy must be one of: ${allowedSortFields.join(', ')}` });
@@ -89,7 +93,7 @@ exports.getAllUsers = async (req, res) => {
     const paginationInfo = await pagination(page, limit, UserModel, query);
 
     const users = await UserModel.find()
-      .sort(sort) // [Cải thiện 5.2] Áp dụng sort
+      .sort(sort)
       .skip((paginationInfo.currentPage - 1) * paginationInfo.pageSize)
       .limit(paginationInfo.pageSize)
       .lean();
@@ -118,31 +122,54 @@ exports.getUserById = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { name, phone_number, role, address, specialization, status, avatar } = req.body;
+    const { name, phone_number, role, address, services, status, avatar } = req.body;
 
+    // Kiểm tra xem user có tồn tại không
     const user = await UserModel.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (role === 'technician' && specialization) {
-      const validSpecializations = ['plumbing', 'electrical', 'carpentry', 'hvac'];
-      if (!specialization.every(spec => validSpecializations.includes(spec))) {
-        return res.status(400).json({ error: 'Invalid specialization. Must be one of: plumbing, electrical, carpentry, hvac' });
+    // Kiểm tra services nếu role là technician
+    if (role === 'technician' && services) {
+      if (!Array.isArray(services)) {
+        return res.status(400).json({ error: 'Services must be an array.' });
+      }
+
+      // Kiểm tra tính hợp lệ của các ObjectId trong services
+      if (services.length > 0 && !services.every(id => mongoose.Types.ObjectId.isValid(id))) {
+        return res.status(400).json({ error: 'Invalid service ID in services array.' });
+      }
+
+      // Kiểm tra xem các service ID có tồn tại trong collection ServiceType không
+      if (services.length > 0) {
+        const validServices = await ServiceTypeModel.find({ _id: { $in: services } });
+        if (validServices.length !== services.length) {
+          return res.status(400).json({ error: 'One or more service IDs do not exist.' });
+        }
       }
     }
 
-    user.name = name || user.name;
-    user.phone_number = phone_number || user.phone_number;
-    user.role = role || user.role;
-    user.address = (role === 'customer' || role === 'technician') ? address || user.address : undefined;
-    user.specialization = role === 'technician' ? specialization || user.specialization : undefined;
-    user.status = status || user.status;
-    user.avatar = avatar !== undefined ? avatar : user.avatar;
+    // Cập nhật thông tin user
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          name: name || user.name,
+          phone_number: phone_number || user.phone_number,
+          role: role || user.role,
+          address: (role === 'customer' || role === 'technician') ? (address || user.address) : undefined,
+          services: role === 'technician' ? (services !== undefined ? services : user.services) : undefined,
+          status: status || user.status,
+          avatar: avatar !== undefined ? avatar : user.avatar,
+        },
+      },
+      { new: true, runValidators: true } // Trả về user đã cập nhật và chạy validation
+    );
 
-    const updatedUser = await user.save();
     res.status(200).json({ success: true, user: updatedUser });
   } catch (err) {
+    console.error('Error:', err);
     res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 };

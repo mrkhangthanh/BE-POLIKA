@@ -5,6 +5,7 @@ module.exports = {
   DieuHoa: 'Điều hòa',
   ChongTham: 'Chống thấm',
   ThoXayDung: 'Thợ xây dựng',
+  ThoMoc: 'Thợ mộc',
   other: 'Khác...',
-    VALID_SERVICE_TYPES: ['DienNuoc', 'DonVeSinh', 'SuaMayGiat', 'DieuHoa','ChongTham','ThoXayDung', 'other'],
+    VALID_SERVICE_TYPES: ['DienNuoc', 'DonVeSinh', 'SuaMayGiat', 'DieuHoa','ChongTham','ThoXayDung','ThoMoc', 'other'],
   };

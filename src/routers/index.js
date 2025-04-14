@@ -10,6 +10,7 @@ const postRoutes = require('../apps/post/routers/post');
 const messageRoutes = require('../apps/message/routers/message');
 const agentRoutes = require('../apps/agent/routers/agent');
 const statsRoutes = require('../apps/stats/routers/stats');
+const fcmRoutes = require('../apps/fcmToken/routers/fcm');
 
 // Định nghĩa các route
 router.use(authRoutes);
@@ -19,5 +20,6 @@ router.use(postRoutes);
 router.use(messageRoutes);
 router.use(agentRoutes);
 router.use(statsRoutes);
+router.use(fcmRoutes);
 
 module.exports = router;

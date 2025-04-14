@@ -17,6 +17,12 @@ router.post(
   handleValidationErrors,
   customerController.createOrder
 );
+// lấy tất cả danh sách đơn hàng 
+router.get('/all-orders',
+   authMiddleware,
+   customerValidator.getAllOrdersValidation,
+  handleValidationErrors,
+   customerController.getAllOrders);
 
 router.get(
   '/customer/orders',
@@ -83,7 +89,7 @@ router.get(
   customerController.getOrderById
 );
 // Route mới: Lấy danh sách dịch vụ (service_types)
-router.get('/category-service', authMiddleware, customerController.getCategoryService); 
+router.get('/category-service', customerController.getCategoryService); 
 // Route mới
 router.post(
   '/category-service',

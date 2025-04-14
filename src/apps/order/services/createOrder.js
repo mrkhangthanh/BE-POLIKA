@@ -9,9 +9,9 @@ async function createOrder(userId, orderData) {
   const { service_type, description, address, phone_number, price } = orderData;
 
   // Kiểm tra loại dịch vụ
-  if (!VALID_SERVICE_TYPES.includes(service_type)) {
-    throw new Error(`Invalid service type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}`);
-  }
+//   if (!VALID_SERVICE_TYPES.includes(service_type)) {
+//     throw new Error(`Invalid service type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}`);
+//   }
 
   // Tìm user
   const user = await UserModel.findById(userId);

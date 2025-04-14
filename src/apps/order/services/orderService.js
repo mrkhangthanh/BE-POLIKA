@@ -20,9 +20,13 @@ class OrderService {
     return updateOrder(userId, orderId, orderData);
   }
 
-  // Lấy danh sách đơn hàng của khách hàng
+  // Lấy danh sách đơn hàng của khách hàng đó
   static async getCustomerOrders(userId, query) {
     return getCustomerOrders(userId, query);
+  }
+  // Lấy danh sách đơn hàng của Tất cả khách hàng
+  static async getAllOrders(userId, query) {
+    return getAllOrders(userId, query);
   }
 
   // Hủy đơn hàng
