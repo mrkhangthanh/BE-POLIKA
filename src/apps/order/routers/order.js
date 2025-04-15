@@ -24,6 +24,16 @@ router.get('/all-orders',
   handleValidationErrors,
    customerController.getAllOrders);
 
+// lấy tất cả danh sách đơn hàng không cần xác thực 
+router.get('/list-Orders-Home',
+  
+   customerValidator.getAllOrdersValidation,
+   handleValidationErrors,
+   customerController.getPublicOrders);
+
+
+
+
 router.get(
   '/customer/orders',
   authMiddleware,

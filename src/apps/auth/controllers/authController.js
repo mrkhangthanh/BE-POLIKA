@@ -40,25 +40,48 @@ exports.login = async (req, res) => {
     const loginValue = identifier || email;
 
     if (!loginValue || !password) {
-      return res.status(400).json({ error: 'Vui lòng nhập email hoặc Số điện thoại and password.' });
+      return res.status(400).json({
+        errorCode: 'MISSING_FIELDS',
+        errorMessage: 'Vui lòng nhập email hoặc số điện thoại và mật khẩu.',
+      });
     }
+
+    console.log(`Attempting login with identifier: ${loginValue}`);
 
     const user = await UserModel.findOne({
       $or: [{ email: loginValue }, { phone_number: loginValue }],
     })
       .select('+password')
       .lean();
+
     if (!user) {
-      return res.status(401).json({ error: 'Email hoặc số điện thoại không tồn tại.' });
+      console.log(`User not found for identifier: ${loginValue}`);
+      return res.status(401).json({
+        errorCode: 'INVALID_IDENTIFIER',
+        errorMessage: 'Email hoặc số điện thoại không tồn tại.',
+        field: 'identifier',
+      });
     }
+
+    console.log(`User found: ${user._id}, email: ${user.email}, phone: ${user.phone_number}`);
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Mật Khẩu Không Đúng.' });
+      console.log(`Password mismatch for user: ${user._id}`);
+      return res.status(401).json({
+        errorCode: 'INVALID_PASSWORD',
+        errorMessage: 'Mật khẩu không đúng.',
+        field: 'password',
+      });
     }
 
     if (user.status !== 'active') {
-      return res.status(403).json({ error: 'Tài khoản đã bị khóa.' });
+      console.log(`User account is locked: ${user._id}`);
+      return res.status(403).json({
+        errorCode: 'ACCOUNT_LOCKED',
+        errorMessage: 'Tài khoản đã bị khóa.',
+        field: 'identifier',
+      });
     }
 
     const accessToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -71,20 +94,28 @@ exports.login = async (req, res) => {
         refresh_token_expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
         last_login: new Date(),
       }
-    );
+    ).catch(err => {
+      console.error(`Error updating user ${user._id}:`, err);
+      throw new Error('Không thể cập nhật thông tin đăng nhập.');
+    });
 
     const { password: _, refresh_token: __, ...userData } = user;
 
     const loginMethod = /^\S+@\S+\.\S+$/.test(loginValue) ? 'email' : 'phone_number';
     logger.info(`User logged in: ${loginValue} (ID: ${user._id}) via ${loginMethod}`);
 
+    console.log(`Login successful for user: ${user._id}`);
+
     res.status(200).json({ success: true, accessToken, refreshToken, user: userData });
   } catch (err) {
+    console.error(`Login error for identifier ${req.body.identifier || req.body.email}:`, err);
     logger.error(`Login error: ${err.message}`);
-    res.status(500).json({ error: 'Internal server error', details: err.message });
+    res.status(500).json({
+      errorCode: 'SERVER_ERROR',
+      errorMessage: 'Đã xảy ra lỗi máy chủ. Vui lòng thử lại sau.',
+    });
   }
 };
-
 // Đăng ký (cho khách hàng và thợ)
 exports.register = async (req, res) => {
   try {

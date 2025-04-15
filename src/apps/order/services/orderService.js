@@ -3,7 +3,9 @@ const createOrder = require('./createOrder');
 const updateOrder = require('./updateOrder');
 const cancelOrder = require('./cancelOrder');
 const getCustomerOrders = require('./getCustomerOrders');
+const getAllOrders = require('./getAllOrder');
 const getOrdersForTechnician = require('./getOrdersForTechnician');
+
 const acceptOrder = require('./acceptOrder');
 const rejectOrder = require('./rejectOrder');
 const completeOrder = require('./completeOrder');
@@ -25,9 +27,10 @@ class OrderService {
     return getCustomerOrders(userId, query);
   }
   // Lấy danh sách đơn hàng của Tất cả khách hàng
-  static async getAllOrders(userId, query) {
-    return getAllOrders(userId, query);
+  static async getAllOrders(query) {
+    return getAllOrders(query);
   }
+
 
   // Hủy đơn hàng
   static async cancelOrder(userId, orderId) {
