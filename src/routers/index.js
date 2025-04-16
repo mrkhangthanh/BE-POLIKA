@@ -11,6 +11,7 @@ const messageRoutes = require('../apps/message/routers/message');
 const agentRoutes = require('../apps/agent/routers/agent');
 const statsRoutes = require('../apps/stats/routers/stats');
 const fcmRoutes = require('../apps/fcmToken/routers/fcm');
+const categoryServiceRoutes = require('../apps/categoryService/routers/categoryServices');
 
 // Định nghĩa các route
 router.use(authRoutes);
@@ -21,5 +22,6 @@ router.use(messageRoutes);
 router.use(agentRoutes);
 router.use(statsRoutes);
 router.use(fcmRoutes);
+router.use(categoryServiceRoutes);
 
 module.exports = router;

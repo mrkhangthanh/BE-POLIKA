@@ -1,5 +1,5 @@
 const mongoose = require('../../../common/init.myDB')();
-const ServiceType = require('../models/serviceType');
+const ServiceType = require('../../categoryService/models/serviceType');
 
 const orderSchema = new mongoose.Schema({
   customer_id: {
@@ -16,6 +16,7 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, // Thay đổi thành ObjectId
     ref: 'ServiceType', // Tham chiếu đến collection ServiceType
     required: true,
+    index: true,
   },
   description: {
     type: String,

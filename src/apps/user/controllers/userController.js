@@ -1,5 +1,5 @@
 const UserModel = require('../../auth/models/user');
-const ServiceTypeModel = require('../../order/models/serviceType'); // Thêm model ServiceType để kiểm tra ObjectId
+const ServiceTypeModel = require('../../categoryService/models/serviceType'); // Thêm model ServiceType để kiểm tra ObjectId
 const { body, validationResult } = require('express-validator');
 const pagination = require('../../../libs/pagination');
 const bcrypt = require('bcryptjs');

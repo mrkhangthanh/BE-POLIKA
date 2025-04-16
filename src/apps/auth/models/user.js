@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'manager', 'content_writer', 'customer', 'technician', 'agent'],
     required: [true, 'Vai trò là bắt buộc']
   },
-  services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceType' }], // Lưu danh sách ID dịch vụ
+  services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceType', index: true }], // Lưu danh sách ID dịch vụ
   fcmToken: { type: String }, // Thêm trường để lưu FCM token
   address: {
     street: { type: String, required: false },
