@@ -19,12 +19,21 @@ const getCustomerOrders = async (req, res) => {
       return res.status(400).json({ error: 'Limit cannot exceed 100.' });
     }
 
-    const filter = { user: req.user._id };
+    const filter = { customer_id: req.user._id }; // Sửa "user" thành "customer_id"
     if (status) {
       filter.status = status;
     }
 
-    const { orders } = await OrderService.getCustomerOrders(req.user._id, req.query);
+    // Gọi OrderService.getCustomerOrders với populate để lấy label của service_type
+    const { orders } = await OrderService.getCustomerOrders(req.user._id, {
+      ...req.query,
+      populate: [
+        { path: 'customer_id', select: 'name' },
+        { path: 'technician_id', select: 'name' },
+        { path: 'service_type', select: 'label' }, // Populate service_type để lấy label
+      ],
+    });
+
     const paginationInfo = await pagination(page, limit, Order, filter);
 
     res.status(200).json({

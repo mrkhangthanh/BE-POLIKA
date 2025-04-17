@@ -12,7 +12,7 @@ const createOrder = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    console.log('Received Order Data in createOrder:', JSON.stringify(req.body, null, 2));
+    // console.log('Received Order Data in createOrder:', JSON.stringify(req.body, null, 2));
 
     const { service_type, description, address, phone_number, price } = req.body;
 
@@ -31,11 +31,11 @@ const createOrder = async (req, res) => {
     const recentOrder = await Order.findOne({
       customer_id: req.user._id,
       service_type: serviceType._id,
-      created_at: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // Trong 5 phút gần đây
+      created_at: { $gte: new Date(Date.now() - 3 * 60 * 1000) }, // Trong 3 phút gần đây
     });
 
     if (recentOrder) {
-      return res.status(400).json({ error: 'Đơn hàng tương tự đã được tạo gần đây. Vui lòng thử lại sau.' });
+      return res.status(400).json({ error: 'Đơn hàng tương tự mới được tạo. Vui lòng vào danh sách đơn để sửa. Hoặc chờ sau 3 phút .' });
     }
 
     const orderData = {
@@ -43,9 +43,9 @@ const createOrder = async (req, res) => {
       service_type: serviceType._id,
     };
 
-    console.log(`Creating order for user ${req.user._id} with data:`, orderData);
+    // console.log(`Creating order for user ${req.user._id} with data:`, orderData);
     const order = await OrderService.createOrder(req.user._id, orderData);
-    console.log(`Order created successfully: ${order._id}`);
+    // console.log(`Order created successfully: ${order._id}`);
 
     // Trả về response ngay lập tức
     res.status(201).json({ success: true, order });
@@ -60,7 +60,7 @@ const createOrder = async (req, res) => {
           .select('name fcmToken')
           .lean();
 
-        console.log(`Found ${technicians.length} technicians for service type ${serviceType.label}`);
+        // console.log(`Found ${technicians.length} technicians for service type ${serviceType.label}`);
 
         const notificationTitle = 'Đơn hàng mới!';
         const notificationBody = `Một đơn hàng mới trong lĩnh vực ${serviceType.label} vừa được tạo. Kiểm tra ngay!`;
@@ -94,7 +94,7 @@ const createOrder = async (req, res) => {
             .sort({created_at: -1 })
             .limit(50)
             .lean();
-          console.log('Sending order_update event with orders:', updatedOrders.length);
+          // console.log('Sending order_update event with orders:', updatedOrders.length);
           req.io.emit('order_update', updatedOrders);
         } else {
           console.error('Socket.IO instance (req.io) is not available.');
