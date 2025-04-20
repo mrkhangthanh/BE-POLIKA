@@ -30,7 +30,7 @@ async function getAllOrders(query) {
       .limit(parseInt(limit))
       .lean();
   
-    console.log('Orders found in service:', orders);
+    // console.log('Orders found in service:', orders);
   
     logger.info(`Retrieved all customer orders.`);
   

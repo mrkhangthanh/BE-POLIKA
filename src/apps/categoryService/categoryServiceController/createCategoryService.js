@@ -1,5 +1,5 @@
 const { validationResult } = require('express-validator');
-const ServiceType = require('../order/models/serviceType');
+const ServiceType = require('../../order/models/serviceType');
 
 const createCategoryService = async (req, res) => {
   try {

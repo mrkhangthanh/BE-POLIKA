@@ -1,10 +1,14 @@
-// firebase.js
 const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json'); // Đường dẫn đến file serviceAccountKey.json
+const serviceAccount = require('./serviceAccountKey.json');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log('Firebase Admin initialized successfully');
+} catch (error) {
+  console.error('Error initializing Firebase Admin:', error);
+}
 
 const sendPushNotification = async (fcmToken, title, body) => {
   const message = {
@@ -16,10 +20,12 @@ const sendPushNotification = async (fcmToken, title, body) => {
   };
 
   try {
-    await admin.messaging().send(message);
-    console.log('Push notification sent successfully:', fcmToken);
+    const response = await admin.messaging().send(message);
+    console.log('Push notification sent successfully to token:', fcmToken);
+    return response;
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    console.error('Error sending push notification to token:', fcmToken, error);
+    throw error;
   }
 };
 

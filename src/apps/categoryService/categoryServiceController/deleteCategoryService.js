@@ -1,4 +1,4 @@
-const ServiceType = require('../order/models/serviceType');
+const ServiceType = require('../../order/models/serviceType');
 
 const deleteCategoryService = async (req, res) => {
   try {

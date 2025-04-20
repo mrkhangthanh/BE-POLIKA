@@ -13,7 +13,7 @@ const getAllOrders = async (req, res) => {
     }
 
     const { page = 1, limit = 10, status } = req.query;
-    console.log('Query params:', { page, limit, status }); // Log query params
+    // console.log('Query params:', { page, limit, status }); // Log query params
 
     if (isNaN(page) || isNaN(limit)) {
       return res.status(400).json({ error: 'Page and limit must be numbers.' });
@@ -32,12 +32,12 @@ const getAllOrders = async (req, res) => {
     const { orders } = await OrderService.getAllOrders(req.query);
 
 
-    console.log('Orders found in controller:', orders);
+    // console.log('Orders found in controller:', orders);
 
     // Sử dụng queryConditions cho pagination
     const paginationInfo = await pagination(page, limit, Order, queryConditions);
 
-    console.log('Pagination info:', paginationInfo);
+    // console.log('Pagination info:', paginationInfo);
 
     res.status(200).json({
       success: true,
