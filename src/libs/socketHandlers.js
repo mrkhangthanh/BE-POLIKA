@@ -119,7 +119,7 @@ const handleSocket = (io) => {
 
         const { conversationId, sender, content, type, created_at } = message;
 
-        if (!sender || !sender.id) {
+        if (!sender || !sender.id || !sender.role || !sender.name) {
           throw new Error('Invalid sender data');
         }
 
@@ -190,26 +190,23 @@ const handleSocket = (io) => {
       }
     });
 
-    // Xử lý gửi tin nhắn hỗ trợ từ admin/manager dựa trên conversationId (sự kiện mới)
+    // Xử lý gửi tin nhắn hỗ trợ từ admin/manager hoặc customer
     socket.on('send_support_message', async (message) => {
       try {
         console.log('Received send_support_message:', message);
 
         const { conversationId, sender, content, type, created_at } = message;
 
-        if (!sender || !sender.id) {
-          throw new Error('Invalid sender data');
+        // Kiểm tra dữ liệu sender chi tiết
+        if (!sender || !sender.id || !sender.name) {
+          throw new Error('Invalid sender data: Missing id or name');
         }
 
         if (!conversationId) {
           throw new Error('Conversation ID is required');
         }
 
-        if (sender.role !== 'admin' && sender.role !== 'manager') {
-          throw new Error('Unauthorized: Only admin or manager can send support messages');
-        }
-
-        const conversation = await Conversation.findById(conversationId);
+        const conversation = await Conversation.findById(conversationId).populate('participants.userId');
         if (!conversation) {
           throw new Error(`Conversation with ID ${conversationId} not found`);
         }
@@ -218,8 +215,8 @@ const handleSocket = (io) => {
         let receiverId;
         const participants = conversation.participants;
         for (const participant of participants) {
-          if (participant.userId.toString() !== sender.id) {
-            receiverId = participant.userId.toString();
+          if (participant.userId && participant.userId._id && participant.userId._id.toString() !== sender.id) {
+            receiverId = participant.userId._id.toString();
             break;
           }
         }
@@ -234,7 +231,7 @@ const handleSocket = (io) => {
           conversationId,
           sender: {
             userId: sender.id,
-            role: sender.role,
+            role: sender.role || 'customer', // Mặc định role nếu không có
           },
           content: type === 'text' ? content : undefined,
           type,
@@ -246,17 +243,18 @@ const handleSocket = (io) => {
         await newMessage.save();
 
         const socketMessage = {
-          id: newMessage._id,
+          id: newMessage._id.toString(),
           conversationId,
           sender: {
             id: sender.id,
-            role: sender.role,
+            role: sender.role || 'customer',
             name: sender.name,
           },
           content,
           type,
           created_at: created_at || new Date().toISOString(),
           isRead: false,
+          receiverId,
         };
 
         io.to(conversationId).emit('new_message', socketMessage);

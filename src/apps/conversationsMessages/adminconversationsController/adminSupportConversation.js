@@ -6,34 +6,36 @@ const getSupportConversation = async (req, res) => {
     const userId = req.user.id; // Lấy từ authMiddleware
     const user = await User.findById(userId);
 
-    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
-      return res.status(403).json({
+    if (!user) {
+      return res.status(401).json({
         success: false,
-        message: 'Unauthorized: Only admin or manager can access this endpoint',
+        message: 'User not found',
       });
     }
 
-    // Tìm hội thoại hỗ trợ hiện có (giả định admin/manager có hội thoại với một user mặc định hoặc nhóm hỗ trợ)
+    // Tìm hội thoại hỗ trợ hiện có
     let conversation = await Conversation.findOne({
       participants: { $elemMatch: { userId: userId } },
-      isSupport: true, // Giả định Conversation có field isSupport để đánh dấu hội thoại hỗ trợ
+      isSupport: true,
     });
 
     // Nếu không có hội thoại, tạo mới
     if (!conversation) {
-      // Tìm một user mặc định để tạo hội thoại (có thể là một tài khoản "Hỗ trợ" chung)
-      const defaultSupportUser = await User.findOne({ role: 'support' }); // Giả định có role "support"
-      if (!defaultSupportUser) {
+      // Tìm một admin hoặc manager mặc định để tạo hội thoại
+      const supportUser = await User.findOne({
+        role: { $in: ['admin', 'manager'] },
+      });
+      if (!supportUser) {
         return res.status(404).json({
           success: false,
-          message: 'Default support user not found',
+          message: 'No admin or manager found to create support conversation',
         });
       }
 
       conversation = new Conversation({
         participants: [
           { userId: userId, role: user.role },
-          { userId: defaultSupportUser._id, role: defaultSupportUser.role },
+          { userId: supportUser._id, role: supportUser.role },
         ],
         isSupport: true,
         created_at: new Date(),

@@ -17,6 +17,7 @@ const notificationCustomerRoutes = require('../apps/NotificationCustomer/routers
 const conversationsMessagesRoutes = require('../apps/conversationsMessages/routers/conversationsMessages'); // Đường dẫn đến file conversationsMessagesRoutes.js
 const adminConversationsMessagesRoutes = require('../apps/conversationsMessages/routers/adminConversationsMessages'); // Đường dẫn đến file adminConversationsMessagesRoutes.js
 const userAdminRoutes = require('../apps/userAdmin/routers/userAdminRt'); // Đường dẫn đến file userAdminRoutes.js
+const supportConversationRoutes = require('../apps/SupportConversation/routers/conversationRoutes'); // Đường dẫn đến file supportConversationRoutes.js
 
 // Định nghĩa các route
 router.use(authRoutes);
@@ -32,5 +33,6 @@ router.use(notificationCustomerRoutes); // Sử dụng route cho thông báo cus
 router.use(conversationsMessagesRoutes); // Sử dụng route cho converstation ở đây
 router.use(adminConversationsMessagesRoutes); // Sử dụng route cho admin conversation ở đây
 router.use(userAdminRoutes); // Sử dụng route cho user admin ở đây
+router.use(supportConversationRoutes); // Sử dụng route cho support conversation ở đây
 
 module.exports = router;

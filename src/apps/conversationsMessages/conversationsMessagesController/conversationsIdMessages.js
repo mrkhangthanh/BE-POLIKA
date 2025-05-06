@@ -1,4 +1,5 @@
 const Conversation = require('../models/Conversation');
+const SupportConversation = require('../../SupportConversation/models/SupportConversation');
 const Message = require('../models/Message');
 const User = require('../../auth/models/user');
 
@@ -6,8 +7,12 @@ const User = require('../../auth/models/user');
 const sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const userId = req.user._id;
-    const userRole = req.user.role;
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'Invalid sender data' });
+    }
+
+    const userId = req.user._id.toString();
+    const userRole = req.user.role || 'unknown';
     const { content, type } = req.body;
     let imageUrl = null;
 
@@ -16,34 +21,38 @@ const sendMessage = async (req, res) => {
     }
 
     // Tìm conversation và populate participants
-    const conversation = await Conversation.findById(conversationId).populate('participants.userId');
+    let conversation;
+    const isSupportConversation = await SupportConversation.exists({ _id: conversationId });
+    if (isSupportConversation) {
+      conversation = await SupportConversation.findById(conversationId).populate('participants.userId');
+    } else {
+      conversation = await Conversation.findById(conversationId).populate('participants.userId');
+    }
+
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
     // Kiểm tra user có phải participant không
     const isParticipant = conversation.participants.some(
-      (p) => p.userId._id.toString() === userId.toString()
+      (p) => p.userId && p.userId._id && p.userId._id.toString() === userId
     );
     if (!isParticipant) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    // Xác định receiverId từ participants
-    let receiverId;
-    const senderParticipant = conversation.participants.find(
-      (p) => p.userId._id.toString() === userId.toString()
-    );
-    const receiverParticipant = conversation.participants.find(
-      (p) => p.userId._id.toString() !== userId.toString()
-    );
-
-    if (!receiverParticipant) {
-      return res.status(400).json({ success: false, message: 'Receiver not found in conversation' });
+    // Xác định receiverId cho Conversation (1:1), bỏ qua cho SupportConversation
+    let receiverId = null;
+    if (!isSupportConversation && conversation.participants.length === 2) {
+      const receiverParticipant = conversation.participants.find(
+        (p) => p.userId && p.userId._id && p.userId._id.toString() !== userId
+      );
+      if (receiverParticipant && receiverParticipant.userId && receiverParticipant.userId._id) {
+        receiverId = receiverParticipant.userId._id.toString();
+      } else {
+        return res.status(400).json({ success: false, message: 'Receiver not found in conversation' });
+      }
     }
-
-    receiverId = receiverParticipant.userId._id.toString();
-    const receiverName = receiverParticipant.userId.name; // Lấy tên của người nhận (nếu cần)
 
     // Lưu tin nhắn vào database
     const message = new Message({
@@ -62,12 +71,12 @@ const sendMessage = async (req, res) => {
 
     // Chuẩn bị dữ liệu newMessage để phát qua socket
     const newMessage = {
-      id: message._id,
+      id: message._id.toString(),
       conversationId,
       sender: {
         id: userId,
         role: userRole,
-        name: req.user.name, // Thêm name vào sender
+        name: req.user.name || 'Người gửi',
       },
       content: message.content,
       type: message.type,
@@ -75,22 +84,27 @@ const sendMessage = async (req, res) => {
       created_at: message.created_at,
       reaction: message.reaction,
       isRead: message.isRead,
-      receiverId, // Thêm receiverId vào newMessage
     };
 
     // Phát sự kiện new_message qua Socket.IO
     const io = req.app.get('io');
     if (io) {
-      // Phát đến phòng conversationId (giữ nguyên logic cũ)
       io.to(conversationId.toString()).emit('new_message', newMessage);
       console.log(`New message sent to conversation room ${conversationId}:`, newMessage);
 
-      // Phát đến phòng của người nhận (receiverId)
-      if (receiverId && receiverId !== userId.toString()) {
+      // Gửi tin nhắn đến receiver hoặc tất cả participants (trừ sender) tùy loại hội thoại
+      if (receiverId && receiverId !== userId) {
         io.to(receiverId).emit('new_message', newMessage);
         console.log(`New message sent to user ${receiverId}:`, newMessage);
-      } else {
-        console.log(`No receiverId available or receiver is the sender:`, newMessage);
+      } else if (isSupportConversation) {
+        const participants = conversation.participants;
+        for (const participant of participants) {
+          const participantId = participant.userId._id ? participant.userId._id.toString() : participant.userId.toString();
+          if (participantId !== userId) {
+            io.to(participantId).emit('new_message', newMessage);
+            console.log(`New message sent to user ${participantId}:`, newMessage);
+          }
+        }
       }
     } else {
       console.error('Socket.IO instance is not available in sendMessage');
@@ -99,7 +113,7 @@ const sendMessage = async (req, res) => {
     // Trả về phản hồi
     res.status(201).json({
       success: true,
-      data: newMessage, // Trả về full newMessage thay vì chỉ data
+      data: newMessage,
     });
   } catch (error) {
     console.error('Error in sendMessage:', error);

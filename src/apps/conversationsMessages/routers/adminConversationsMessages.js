@@ -79,7 +79,6 @@ router.delete(
 router.get(
   '/admin/support/conversation',
   authMiddleware,
-  requireRole(['admin', 'manager'], { readOnly: true }),
   adminSupportConversationController.getSupportConversation
 );
 

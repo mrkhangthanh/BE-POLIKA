@@ -15,6 +15,10 @@ const conversationSchema = new mongoose.Schema({
       },
     },
   ],
+  isSupport: {
+    type: Boolean,
+    default: false, // Thêm field isSupport
+  },
   created_at: {
     type: Date,
     default: Date.now,

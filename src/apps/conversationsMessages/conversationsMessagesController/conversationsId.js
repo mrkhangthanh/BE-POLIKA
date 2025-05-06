@@ -6,6 +6,7 @@ const getConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user._id;
+    const userRole = req.user.role || 'unknown';
     const { limit = 1000, page = 1 } = req.query; // Tăng limit mặc định lên 1000
     const skip = (page - 1) * limit;
 
@@ -24,6 +25,7 @@ const getConversation = async (req, res) => {
     }
     console.log('Conversation after populate:', conversation);
 
+    // Kiểm tra xem user có phải là participant không
     const isParticipant = conversation.participants.some((p) => {
       const participantId = p.userId._id ? p.userId._id.toString() : p.userId.toString();
       return participantId === userId.toString();
@@ -32,6 +34,25 @@ const getConversation = async (req, res) => {
 
     if (!isParticipant) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // Kiểm tra nếu là hội thoại hỗ trợ (isSupport: true)
+    const isSupportConversation = conversation.isSupport || false;
+    const allowedRolesForSupport = ['customer', 'admin', 'manager'];
+    if (isSupportConversation && !allowedRolesForSupport.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền truy cập hội thoại hỗ trợ này',
+      });
+    }
+
+    // Kiểm tra nếu không phải hội thoại hỗ trợ, chỉ cho phép customer và technician
+    const allowedRolesForNormal = ['customer', 'technician'];
+    if (!isSupportConversation && !allowedRolesForNormal.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền truy cập hội thoại này',
+      });
     }
 
     const receiver = conversation.participants.find((p) => {
