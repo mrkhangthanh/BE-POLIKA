@@ -60,6 +60,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// Set io to app for later use in routes
+app.set('io', io);
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -84,5 +86,7 @@ app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
+
+console.log('Server starting with updated code...'); // Thêm log tại đây
 
 module.exports = server;

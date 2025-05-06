@@ -59,8 +59,8 @@ class OrderService {
 
 
   // Xem chi tiết đơn hàng
-  static async getOrderById(userId, orderId) {
-    return getOrderById(userId, orderId);
+  static async getOrderById(user, orderId) {
+    return getOrderById(user, orderId);
   }
 }
 

@@ -10,7 +10,7 @@ const requireRole = (roles, options = { readOnly: false }) => {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
-    if (!options.readOnly && req.method !== 'GET') {
+    if (!options.readOnly && req.method !== 'GET' && req.path !== '/SupportId') {
       if (!['admin', 'manager'].includes(req.user.role)) {
         // Đại lý chỉ được phép đọc, không được ghi
         if (req.user.role === 'agent') {

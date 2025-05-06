@@ -95,6 +95,8 @@ router.put(
 router.get(
   '/orders/:id',
   authMiddleware,
+  requireRole(['technician', 'customer', 'admin']),
+  
   customerController.getOrderById
 );
 
